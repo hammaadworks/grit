@@ -36,24 +36,41 @@ def generate_commit_message(diff: str, base_url: str, api_key: str, model: str) 
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Here is the diff:\n\n{diff}"}
         ],
-        "temperature": 0.3,
-        "max_tokens": 200
+        "temperature": 0.1,
+        "max_tokens": 500
     }
 
     try:
         url = f"{base_url.rstrip('/')}/chat/completions"
-        with httpx.Client(timeout=10.0) as client:
+        # Increased timeout to 60.0s to allow for local model cold-starts
+        with httpx.Client(timeout=60.0) as client:
             response = client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             
             data = response.json()
             if "choices" in data and len(data["choices"]) > 0:
-                msg = data["choices"][0]["message"]["content"].strip()
+                choice = data["choices"][0]
+                message = choice.get("message", {})
+                msg = message.get("content", "")
+                
+                # Fallback for models that output primarily in reasoning (common in some distilled models)
+                if not msg.strip() and "reasoning" in message:
+                    msg = message["reasoning"]
+                
+                msg = msg.strip()
+                if not msg:
+                    return None
+
                 # Strip markdown code blocks just in case the LLM disobeys
                 if msg.startswith("```"):
-                    msg = "\n".join(msg.split("\n")[1:-1])
+                    lines = msg.split("\n")
+                    if len(lines) > 2:
+                        msg = "\n".join(lines[1:-1])
                 return msg
     except Exception as e:
+        # Import internally to avoid circular dependencies
+        from grit.ui import err_console, ERROR_COLOR
+        err_console.print(f"\n    [{ERROR_COLOR}]AI Error: {str(e)}[/{ERROR_COLOR}]")
         return None
         
     return None
