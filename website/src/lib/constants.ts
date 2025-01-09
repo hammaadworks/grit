@@ -5,7 +5,7 @@
 
 export const SITE_CONFIG = {
   name: "Grit",
-  version: "0.1.0",
+  version: "0.0.1",
   repo_url: "https://github.com/hammaadworks/grit",
   releases_url: "https://github.com/hammaadworks/grit/releases",
   pypi_url: "https://pypi.org/project/grit/",

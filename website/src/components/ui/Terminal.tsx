@@ -18,7 +18,7 @@ interface TerminalLineDef {
 const DEFAULT_LINES: TerminalLineDef[] = [
   { text: "uv tool install grit", type: "input", delay: 500, duration: 1200 },
   { text: "Resolved 24 packages in 142ms", type: "output", delay: 200 },
-  { text: "Installed grit v0.1.0", type: "success", delay: 400 },
+  { text: "Installed grit v0.0.1", type: "success", delay: 400 },
   { text: "grit status", type: "input", delay: 800, duration: 600 },
   { text: "Current Streak: 42 days", type: "output", delay: 300 },
   { text: "Gaps detected: 3 (Last 7 days)", type: "warning", delay: 200 },
