@@ -260,13 +260,18 @@ def dashboard(
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
     )
-def commit(ctx: typer.Context):
+def commit(
+        ctx: typer.Context,
+        verbose: Annotated[
+            bool, typer.Option("--verbose", "-v", help="Show AI interaction logs")
+        ] = False
+):
     """
     The core wrapper for `git commit`. Automatically allocates dates to preserve
     streaks.
     Run without arguments to enter the Interactive AI DevX Wizard.
     """
-    run_commit(state, ctx)
+    run_commit(state, ctx, verbose=verbose)
 
 
 @app.command(

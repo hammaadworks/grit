@@ -36,7 +36,7 @@ from grit.ui import (
 COMMIT_TYPES = ["feat", "fix", "docs", "style", "refactor", "test", "chore"]
 
 
-def run_commit(state: StateManager, ctx: typer.Context):
+def run_commit(state: StateManager, ctx: typer.Context, verbose: bool = False):
     """
     The core wrapper for `git commit`. Automatically allocates dates to preserve streaks.
     Run without arguments to enter the Interactive AI DevX Wizard.
@@ -50,7 +50,7 @@ def run_commit(state: StateManager, ctx: typer.Context):
     selected = _interactive_stage_picker()
     _sync_staging_area(selected)
 
-    final_msg = _interactive_commit_message_flow(state, ctx)
+    final_msg = _interactive_commit_message_flow(state, ctx, verbose=verbose)
     _finalize_commit(state, final_msg)
 
 
@@ -363,7 +363,7 @@ def _sync_staging_area(selected):
 # COMMIT MESSAGE FLOW
 # =========================
 
-def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context):
+def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context, verbose: bool = False):
     ai_key = state.get_config("ai_api_key")
     ai_url = state.get_config("ai_base_url")
     ai_model = state.get_config("ai_model")
@@ -386,14 +386,20 @@ def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context):
 
         if choice == "↩ Go Back":
             subprocess.run(["git", "reset"])
-            return run_commit(state, ctx)
+            return run_commit(state, ctx, verbose=verbose)
 
         if choice == "✨ Auto-generate (AI)":
-            msg = _generate_ai_commit_message(ai_url, ai_key, ai_model)
+            msg = _generate_ai_commit_message(ai_url, ai_key, ai_model, verbose=verbose)
             if msg:
-                return _edit_ai_commit_message(msg)
+                final = _edit_ai_commit_message(msg)
+                if final == "RETRY_MENU":
+                    continue
+                if final:
+                    return final
+                # If final is None, loop again (Regenerate)
             idx = options.index("feat")
             continue
+
 
         if choice in COMMIT_TYPES:
             return _manual_commit_message(choice)
@@ -410,13 +416,13 @@ def _build_commit_options(ai_key):
     return options
 
 
-def _generate_ai_commit_message(ai_url, ai_key, ai_model):
+def _generate_ai_commit_message(ai_url, ai_key, ai_model, verbose: bool = False):
     diff = get_staged_diff()
     with console.status(
         f"[bold {BRAND_COLOR}]AI analyzing diff...[/bold {BRAND_COLOR}]",
         spinner="dots12",
     ):
-        msg = generate_commit_message(diff, ai_url, ai_key, ai_model)
+        msg = generate_commit_message(diff, ai_url, ai_key, ai_model, verbose=verbose)
 
     if msg:
         return msg
@@ -465,22 +471,55 @@ def _prompt_commit_body():
     return _read_multiline_input()
 
 
-def _edit_ai_commit_message(initial_text):
-    parsed = _parse_ai_commit_message(initial_text)
+def _edit_ai_commit_message(initial_text: str):
+    from rich.panel import Panel
+    
+    # Show the AI suggestion as a polished draft in a prominent box
+    console.print("\n\n[bold bright_cyan]AI Draft:[/bold bright_cyan]\n")
+    console.print(Panel(initial_text, border_style=BRAND_COLOR, padding=(1, 2), title="Draft Review", title_align="left"))
+    
+    options = ["✅ Confirm & Commit", "📝 Edit in Editor", "✨ Fine-tune Here", "🔄 Regenerate", "↩ Go Back"]
+    choice, _ = run_selection_menu("Accept this commit message?", options, show_banner=False)
 
-    console.print("\n\n[bold bright_cyan]AI suggestion loaded..[/bold bright_cyan]\n\n")
+    if choice == "✅ Confirm & Commit":
+        return initial_text
+        
+    if choice == "📝 Edit in Editor":
+        # Professional standard: open preferred system editor
+        editor = os.environ.get('EDITOR', 'vi')
+        with tempfile.NamedTemporaryFile(suffix=".gitmessage", mode='w', delete=False) as tf:
+            tf.write(initial_text)
+            path = tf.name
+        try:
+            subprocess.call([editor, path])
+            with open(path, 'r') as f:
+                edited = f.read().strip()
+                if not edited:
+                    console.print("[dim]Aborted: Empty message.[/dim]")
+                    raise typer.Exit(0)
+                return edited
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
 
-    scope_value = _prompt_ai_scope(parsed["scope"], parsed["type"])
-    prefix_part = f"{parsed['type']}({scope_value})" if scope_value else parsed["type"]
-
-    subject = _prompt_ai_subject(prefix_part, parsed["subject"])
-    if not subject.strip():
-        console.print("[dim]Aborted.[/dim]")
-        raise typer.Exit(0)
-
-    body = _prompt_ai_body(prefix_part, parsed["body"])
-
-    return _compose_commit_message(prefix_part, subject, body)
+    if choice == "✨ Fine-tune Here":
+        # The granular terminal flow for small fixes without leaving the shell
+        parsed = _parse_ai_commit_message(initial_text)
+        console.print("\n\n[bold bright_cyan]Quick Refine:[/bold bright_cyan]\n")
+        scope_value = _prompt_ai_scope(parsed["scope"], parsed["type"])
+        prefix_part = f"{parsed['type']}({scope_value})" if scope_value else parsed["type"]
+        subject = _prompt_ai_subject(prefix_part, parsed["subject"])
+        if not subject.strip(): raise typer.Exit(0)
+        body = _prompt_ai_body(prefix_part, parsed["body"])
+        return _compose_commit_message(prefix_part, subject, body)
+        
+    if choice == "🔄 Regenerate":
+        return None 
+        
+    if choice == "↩ Go Back":
+        return "RETRY_MENU"
+        
+    return initial_text
 
 
 def _prompt_ai_scope(default_scope, commit_type):
@@ -556,9 +595,34 @@ def _compose_commit_message(prefix_part, subject, body):
 
 
 def _parse_ai_commit_message(msg):
+    # Some models include chatty preamble like "Here is your commit message:".
+    # We attempt to find the first line that actually looks like a Conventional Commit.
+    import re
     lines = msg.splitlines()
-    first_line = lines[0].strip() if lines else ""
-    body = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+    
+    clean_lines = []
+    found_start = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if found_start: # Keep internal whitespace
+                clean_lines.append("")
+            continue
+            
+        # Check for <type>(<scope>): <subject> or <type>: <subject>
+        if not found_start:
+            if re.match(r'^[a-z]+(\([a-z0-9_-]+\))?: .+', stripped.lower()):
+                found_start = True
+        
+        if found_start:
+            clean_lines.append(stripped)
+            
+    # If we couldn't find a standard start, just use everything cleaned up
+    if not clean_lines:
+        clean_lines = [l.strip() for l in lines if l.strip()]
+
+    first_line = clean_lines[0] if clean_lines else ""
+    body = "\n".join(clean_lines[1:]).strip() if len(clean_lines) > 1 else ""
 
     commit_type = "feat"
     scope = ""
