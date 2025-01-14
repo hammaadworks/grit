@@ -98,7 +98,7 @@ def test_wizard_staged_files_interception(clean_state, mocker):
     clean_state.set_config("fill_strategy", "start_date")
 
     # Mock git state: one staged file, one unstaged file
-    mocker.patch("grit.commands.commit.get_unstaged_files", return_value=["staged.txt", "unstaged.txt"])
+    mocker.patch("grit.executor.get_unstaged_files", return_value=["staged.txt", "unstaged.txt"])
     mocker.patch("grit.commands.commit.get_staged_files", return_value=["staged.txt"])
 
     # Mock Live and get_key to abort immediately with 'q'
@@ -135,6 +135,59 @@ def test_cli_ungrit_force_flag(clean_state):
     assert result.exit_code == 0
     assert "Grit has been decommissioned" in result.stdout
     assert not clean_state.db_path.parent.exists()
+
+def test_cli_commit_logs_flag(clean_state, mocker):
+    """Test that the --logs flag initializes the logger."""
+    # Setup baseline config
+    clean_state.set_config("daily_target", "5")
+    clean_state.set_config("start_date", "2024-01-01")
+    clean_state.set_config("github_username", "testuser")
+    clean_state.set_config("fill_strategy", "start_date")
+    
+    mock_setup = mocker.patch("grit.cli.setup_logger")
+    mocker.patch("grit.commands.commit.run_commit")
+    
+    runner.invoke(app, ["commit", "--logs"])
+    
+    assert mock_setup.called
+    assert mock_setup.call_args[1]["verbose"] is True
+
+def test_ai_commit_generation_structured(clean_state, mocker):
+    """Test that CommitScribe (Pydantic AI) structured generation is handled."""
+    clean_state.set_config("daily_target", "5")
+    clean_state.set_config("start_date", "2024-01-01")
+    clean_state.set_config("github_username", "testuser")
+    clean_state.set_config("fill_strategy", "start_date")
+    clean_state.set_config("ai_api_key", "test-key")
+    clean_state.set_config("ai_base_url", "http://localhost:11434/v1")
+    clean_state.set_config("ai_model", "llama3")
+
+    # Mock staged diff and picker
+    mocker.patch("grit.commands.commit.get_status_files", return_value=[("file.py", "modified")])
+    mocker.patch("grit.commands.commit.get_staged_files", return_value=["file.py"])
+    mocker.patch("grit.commands.commit._interactive_stage_picker", return_value={"file.py"})
+    
+    # Mock selection menu to pick AI generation
+    # Options: ["✨ Auto-generate (AI)", "feat", "fix", ...]
+    mocker.patch("grit.commands.commit.run_selection_menu", side_effect=[
+        ("✨ Auto-generate (AI)", 0), # First call: Pick AI
+        ("✅ Confirm & Commit", 0)    # Second call: Confirm AI draft
+    ])
+
+    # Mock the AI generation call
+    mock_msg = "feat(core): logic updates\n\n- Improved architectural stability."
+    mocker.patch("grit.commands.commit.generate_commit_message", return_value=mock_msg)
+    
+    # Mock final execution
+    mock_finalize = mocker.patch("grit.commands.commit._finalize_commit")
+
+    result = runner.invoke(app, ["commit"])
+    print(result.output)
+    if result.exception:
+        print(result.exception)
+
+    assert mock_finalize.called
+    assert mock_finalize.call_args[0][1] == mock_msg
 
 def test_cli_log_invocation(clean_state, mocker):
     """Test that grit log calls git log with the correct visual graph arguments."""
