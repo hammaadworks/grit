@@ -142,21 +142,19 @@ def run_text_input(title: str, initial_text: str = "", help_text: str = "",
             key = get_key()
 
             # Process key, potentially updating 'text' and then updating the UI
-            if len(key) == 1:  # Normal character input
-                text += key
-                live.update(
-                    grid, refresh=True
-                    )  # Update UI immediately after character append
-            elif key in ('\r', '\n'):  # Enter key
-                text += "\n"
-                live.update(grid, refresh=True)  # Update UI after newline
-            elif key == '\x7f' or key == '\x08':  # Backspace
-                text = text[:-1]
-                live.update(grid, refresh=True)  # Update UI after backspace
-            elif key == '\x04':  # Ctrl+D (EOF / Save)
+            if key == '\x04':  # Ctrl+D (EOF / Save)
                 break
             elif key == '\x03':  # Ctrl+C
                 raise KeyboardInterrupt
+            elif key in ('\r', '\n'):  # Enter key
+                text += "\n"
+                live.update(grid, refresh=True)
+            elif key in ('\x7f', '\x08'):  # Backspace
+                text = text[:-1]
+                live.update(grid, refresh=True)
+            elif len(key) == 1 and ord(key) >= 32:  # Normal character input
+                text += key
+                live.update(grid, refresh=True)
             # Removed Ctrl+E toggle as it's no longer needed with infinite expansion
 
     return text.strip()

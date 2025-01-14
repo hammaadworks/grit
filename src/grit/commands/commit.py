@@ -417,12 +417,41 @@ def _build_commit_options(ai_key):
 
 
 def _generate_ai_commit_message(ai_url, ai_key, ai_model, verbose: bool = False):
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    from rich.spinner import Spinner
+    from rich.columns import Columns
+
     diff = get_staged_diff()
-    with console.status(
-        f"[bold {BRAND_COLOR}]AI analyzing diff...[/bold {BRAND_COLOR}]",
-        spinner="dots12",
-    ):
-        msg = generate_commit_message(diff, ai_url, ai_key, ai_model, verbose=verbose)
+    start_time = time.time()
+    
+    with Live(console=console, refresh_per_second=10) as live:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            # Start AI generation in a background thread
+            future = executor.submit(
+                generate_commit_message, diff, ai_url, ai_key, ai_model, verbose
+            )
+            
+            # Keep the UI alive and updating while the thread is running
+            while not future.done():
+                elapsed = time.time() - start_time
+                ui = Columns([
+                    Spinner("dots12", style=BRAND_COLOR),
+                    Text.from_markup(
+                        f" [bold {BRAND_COLOR}]CommitScribe analyzing diff...[/bold {BRAND_COLOR}] "
+                        f"[dim]({elapsed:.1f}s)[/dim]"
+                    )
+                ])
+                live.update(ui)
+                time.sleep(0.1) # Small sleep to prevent CPU hammering
+            
+            msg = future.result()
+            
+            # Final update with the total time
+            total_elapsed = time.time() - start_time
+            live.update(
+                Text.from_markup(f"    [{SUCCESS_COLOR}]✓ CommitScribe analysis complete ({total_elapsed:.1f}s)[/{SUCCESS_COLOR}]")
+            )
 
     if msg:
         return msg

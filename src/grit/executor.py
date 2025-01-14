@@ -123,12 +123,43 @@ def get_staged_files() -> list[str]:
         return []
 
 def get_staged_diff() -> str:
-    """Returns the raw diff of currently staged files for AI context."""
+    """Returns a sanitized diff of currently staged files for AI context."""
     try:
-        result = subprocess.run(["git", "diff", "--staged"], capture_output=True, text=True)
-        return result.stdout.strip()
+        # Use --no-prefix and --unified=3 to keep it concise
+        result = subprocess.run(
+            ["git", "diff", "--staged", "--no-color", "--no-prefix"],
+            capture_output=True,
+            text=True
+        )
+        return _sanitize_diff(result.stdout)
     except Exception:
         return ""
+
+def _sanitize_diff(raw_diff: str) -> str:
+    """
+    Cleans up git diff output to make it more readable for LLMs.
+    Removes index lines, metadata, and reduces overhead.
+    """
+    if not raw_diff.strip():
+        return ""
+
+    clean_lines = []
+    for line in raw_diff.splitlines():
+        # Skip noise metadata
+        if line.startswith(("index ", "diff --git ", "--- ", "+++ ")):
+            # We keep the filename info if it's the 'diff --git' line but simplify it
+            if line.startswith("diff --git "):
+                clean_lines.append(f"\nFILE: {line.split(' ')[-1]}")
+            continue
+        
+        # Keep hunk headers but clean them up (@@ -1,1 +1,1 @@ -> [Line 1])
+        if line.startswith("@@"):
+            clean_lines.append("[Hunk Header]")
+            continue
+
+        clean_lines.append(line)
+
+    return "\n".join(clean_lines).strip()
 
 def has_staged_files() -> bool:
     """Checks if there are any files currently added to the staging area."""

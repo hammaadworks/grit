@@ -18,6 +18,8 @@ from grit.state import StateManager
 from grit.ui import (ACCENT_COLOR, BRAND_COLOR, console, err_console, ERROR_COLOR,
                      print_banner, SUCCESS_COLOR, WARN_COLOR)
 
+from grit.logger import setup_logger
+
 # Initialize the state globally for the CLI context
 state = StateManager()
 
@@ -53,12 +55,19 @@ def main(
         version: Annotated[
             Optional[bool],
             typer.Option("--version", "-v", callback=version_callback, is_eager=True)
-        ] = None
+        ] = None,
+        logs: Annotated[
+            bool,
+            typer.Option("--logs", help="Enable detailed system logs for debugging")
+        ] = False
 ):
     """
     Primary entry point for the Grit CLI.
     If invoked without a subcommand, intelligently routes to config or status.
     """
+    # Initialize Loguru based on the --logs flag
+    setup_logger(verbose=logs)
+
     # Always print banner except for help, version, or interactive commands that
     # handle their own branding (usually those that use full-screen Live).
     is_interactive = any(arg in sys.argv for arg in ["config", "dashboard", "dash", "move"])
@@ -264,6 +273,9 @@ def commit(
         ctx: typer.Context,
         verbose: Annotated[
             bool, typer.Option("--verbose", "-v", help="Show AI interaction logs")
+        ] = False,
+        logs: Annotated[
+            bool, typer.Option("--logs", help="Enable detailed system logs for debugging")
         ] = False
 ):
     """
@@ -271,6 +283,8 @@ def commit(
     streaks.
     Run without arguments to enter the Interactive AI DevX Wizard.
     """
+    if logs:
+        setup_logger(verbose=True)
     run_commit(state, ctx, verbose=verbose)
 
 

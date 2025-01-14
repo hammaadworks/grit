@@ -1,10 +1,8 @@
 import os
-import json
-import re
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from loguru import logger
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, Field
 from pydantic_ai import Agent
 
 
@@ -12,67 +10,15 @@ from pydantic_ai import Agent
 # Schema
 # =========================
 class CommitMessage(BaseModel):
-    type: str
-    scope: str
-    message: str
-    body: List[str]
-
-
-# =========================
-# Repair Layer
-# =========================
-def _indestructible_surgical_repair(text: str) -> str:
-    text = "".join(c for c in text if ord(c) >= 32 or c in "\n\r\t")
-
-    match = re.search(r"(\{.*\})", text, re.DOTALL)
-    if not match:
-        return text
-
-    raw = match.group(1).strip()
-
-    raw = re.sub(r',(\s*[}\]])', r'\1', raw)
-    raw = re.sub(r'([{,]\s*)(\w+):', r'\1"\2":', raw)
-    raw = raw.replace("'", '"')
-
-    try:
-        data = json.loads(raw)
-
-        if isinstance(data, dict) and "type" not in data:
-            for v in data.values():
-                if isinstance(v, dict) and "type" in v:
-                    data = v
-                    break
-
-        if not isinstance(data, dict):
-            raise ValueError("Not dict")
-
-        if not all(k in data for k in ["type", "scope", "message", "body"]):
-            raise ValueError("Missing keys")
-
-        if not isinstance(data["body"], list):
-            data["body"] = [str(data["body"])]
-
-        return json.dumps(data)
-
-    except Exception:
-        obj = {}
-
-        for key in ["type", "scope", "message"]:
-            m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', raw)
-            if m:
-                obj[key] = m.group(1)
-
-        m_body = re.search(r'"body"\s*:\s*\[(.*?)\]', raw, re.DOTALL)
-        if m_body:
-            items = re.findall(r'"([^"]+)"', m_body.group(1))
-            if items:
-                obj["body"] = items
-
-        if all(k in obj for k in ["type", "scope", "message"]):
-            obj.setdefault("body", ["Recovered insight."])
-            return json.dumps(obj)
-
-    return raw
+    """
+    Structured commit message following Conventional Commits.
+    """
+    type: Literal["feat", "fix", "docs", "style", "refactor", "test", "chore"] = Field(
+        description="The type of the change: feat (new feature), fix (bug fix), docs (documentation), style (formatting), refactor (code change), test (adding tests), chore (maintenance)"
+    )
+    scope: str = Field(description="The architectural scope affected (e.g. core, cli, ui, allocator)")
+    message: str = Field(description="A concise summary of the change in the imperative mood")
+    body: List[str] = Field(description="Detailed points explaining the rationale, impact, or future implications")
 
 
 # =========================
@@ -114,6 +60,11 @@ def generate_commit_message(
 
         if clean_url:
             env_vars["OLLAMA_BASE_URL"] = clean_url
+    elif provider_prefix == "openai":
+        if clean_key:
+            env_vars["OPENAI_API_KEY"] = clean_key
+        if clean_url:
+            env_vars["OPENAI_BASE_URL"] = clean_url
 
     original_env = {k: os.environ.get(k) for k in env_vars}
     os.environ.update(env_vars)
@@ -124,87 +75,62 @@ def generate_commit_message(
         staged_files = get_staged_files()
         files_list = "\n".join(f"- {f}" for f in staged_files)
 
-        instructions = """
-You are NOT a chatbot.
-You are a strict JSON generator.
-Output ONLY valid JSON.
-"""
+        instructions = (
+            "You are a Distinguished System Architect creating high-fidelity Conventional Commit messages.\n"
+            "Analyze the summary, diff, and staged files to create a commit message that reflects technical wisdom.\n"
+            "The message must be structured, professional, and explain the WHY behind the changes.\n"
+            "Respond ONLY with the requested structured output."
+        )
 
         agent = Agent(
             full_model_string,
+            output_type=CommitMessage,
             instructions=instructions,
+            retries=3,
         )
 
-        last_error = None
-
         try:
-            summary_prompt = f"Summarize this git diff in 1 concise sentence:\n{diff}"
-            diff_summary = agent.run_sync(summary_prompt).output.strip()
-        except Exception:
+            summary_agent = Agent(
+                full_model_string,
+                instructions="Summarize this git diff in 1 concise sentence."
+            )
+            summary_prompt = f"Diff:\n{diff}"
+            diff_summary = summary_agent.run_sync(summary_prompt).output.strip()
+        except Exception as e:
+            if verbose:
+                logger.debug(f"Summary agent failed: {e}")
             diff_summary = diff[:500]
 
-        for attempt in range(4):
-            try:
-                prompt = f"""
-FILES:
+        prompt = f"""
+STAGED FILES:
 {files_list}
 
-SUMMARY:
+DIFF SUMMARY:
 {diff_summary}
 
-Respond with EXACTLY this JSON structure:
+RAW DIFF:
+{diff[:2000]}
 
-{{
-  "type": "...",
-  "scope": "...",
-  "message": "...",
-  "body": ["...", "..."]
-}}
-
-Rules:
-- No extra keys
-- No comments
-- No trailing text
-- body MUST be array of strings
-- Output ONLY JSON
-
-Now produce the JSON:
+Generate a Conventional Commit message. 
+The 'type' MUST be one of: feat, fix, docs, style, refactor, test, chore.
+The 'body' MUST be a list of strings explaining rationale and impact.
 """
 
-                if last_error:
-                    prompt += f"\nFix previous error:\n{last_error}\n"
+        try:
+            result = agent.run_sync(prompt)
+            msg_obj = result.output
 
-                # =========================
-                # PREFILL JSON (Point 3)
-                # =========================
-                prompt += '\n{\n  "type": "'
+            if verbose:
+                logger.debug(f"AI GEN RESULT: {msg_obj}")
 
-                result = agent.run_sync(prompt)
-                raw_output = result.output.strip()
+            header = f"{msg_obj.type}({msg_obj.scope}): {msg_obj.message}"
+            body = "\n".join(f"- {b}" for b in msg_obj.body)
 
-                if verbose:
-                    logger.debug(f"RAW:\n{raw_output}")
+            return f"{header}\n\n{body}"
 
-                if not raw_output.startswith("{"):
-                    raise ValueError("Did not start with JSON")
-
-                if '"code"' in raw_output.lower():
-                    raise ValueError("Model returned code")
-
-                clean_json = _indestructible_surgical_repair(raw_output)
-
-                msg_obj = CommitMessage.model_validate_json(clean_json)
-
-                header = f"{msg_obj.type}({msg_obj.scope}): {msg_obj.message}"
-                body = "\n".join(f"- {b}" for b in msg_obj.body)
-
-                return f"{header}\n\n{body}"
-
-            except (ValidationError, Exception) as e:
-                last_error = str(e)
-                logger.warning(f"Attempt {attempt+1} failed: {e}")
-
-        return None
+        except (ValidationError, Exception) as e:
+            logger.warning(f"Generation failed: {e}")
+            return None
 
     finally:
         for k, v in original_env.items():
