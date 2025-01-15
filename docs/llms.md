@@ -1,18 +1,18 @@
 # Grit: AI-Native Project Context & LLM Guide
 
 > [!IMPORTANT]
-> This file is the primary source of truth for AI agents. It contains the technical DNA, architectural constraints, and behavioral rules of Grit.
+> This file is the primary source of truth for AI agents (CommitScribe). It contains the technical DNA, architectural constraints, and behavioral rules of Grit.
 
 ## 1. Project Identity
-Grit is a Python CLI wrapper for `git commit`.
-- **Core Value:** Maintains a consistent GitHub contribution graph by distributing real work across a timeline.
+Grit is a professional CLI utility that intelligently distributes git commits to maintain a consistent contribution graph.
+- **Core Value:** Maintains an unbreakable GitHub streak by distributing real work across an optimized timeline.
 - **Paradigm:** Intercepts `git commit`, calculates the optimal `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`, and executes the native binary.
-- **Stack:** Python (>=3.10), Typer (CLI), Rich (UI), SQLite (State), uv (Package Manager).
+- **Stack:** Python (>=3.10), Typer (CLI), Rich (UI), SQLite (State), Pydantic AI (CommitScribe), Loguru (Logging), uv (Package Manager).
 
 ## 2. Technical Architecture
 
 ### A. The Atomic State (SQLite)
-- **Location:** `~/.config/grit/state.db`
+- **Location:** `~/.grit/state.db`
 - **Tables:**
   - `config`: KV pairs (`daily_target`, `start_date`, `github_username`).
   - `commits`: `date` (PK, YYYY-MM-DD), `count` (INT).
@@ -21,25 +21,25 @@ Grit is a Python CLI wrapper for `git commit`.
   - State only increments if `git commit` exit code is `0`.
 
 ### B. The O(1) Allocator (Recursive CTE)
-Instead of Python loops, we use a single SQL query to find the first available date matching the target.
+Instead of expensive Python loops, we use a single SQL query to find the first available date matching the target.
 - **Rules:** 1. Today (if space) -> 2. Past (earliest first) -> 3. Future.
 - **Query:** Uses a Recursive Common Table Expression bounded to `+365` days to prevent hangs.
 
 ### C. Self-Healing Sync Engine
 - **Local:** Parses `git log --format="%ad" --date=short`.
-- **Remote:** Scrapes public GitHub contribution grid (no API tokens required).
+- **Remote:** Scrapes public GitHub contribution grid.
 - **Merge Rule:** `MAX(internal_db, local_git, remote_github)`. We never overwrite with lower numbers.
 
-### D. Versioning & Update Logic
-- **Sourcing:** `__version__` is defined in `src/grit/__init__.py`.
-- **Update Engine:** `src/grit/updater.py` performs a daily background check against the remote `pyproject.toml`.
-- **Environment Awareness:** Detects `uv` vs `pip` to provide the correct upgrade command (`uv tool upgrade grit` or `pip install -U grit`).
-- **Notification:** `grit status` triggers the check and displays a "New Release" banner if a mismatch is detected.
+### D. CommitScribe AI (Pydantic AI)
+- **Persona:** Distinguished System Architect.
+- **Implementation:** `src/grit/ai.py` uses Pydantic AI for structured commit message generation.
+- **Requirements:** Every message MUST include a technical body with RATIONALE, IMPACT, and FUTURE implications.
+- **Guardrails:** Uses Pydantic models to ensure the header follows `type(scope): message` format.
 
-### E. AI-Native Commit Generation
-- **Philosophy:** Zero vendor lock-in. Supports any LLM (Ollama, Claude, Groq, OpenAI) via configurable endpoints.
-- **Implementation:** `src/grit/ai.py` handles the payload construction and Conventional Commit enforcement.
-- **Wizard Integration:** The zero-arg `grit commit` wizard allows users to trigger auto-generation based on the current staged diff.
+### E. Professional Logging (Loguru)
+- **Configuration:** `src/grit/logger.py` handles system-wide logging.
+- **Rotation:** Automatically rotates and compresses logs in `~/.grit/logs/`.
+- **Global Control:** The `--logs` flag enables detailed console output across all Grit commands.
 
 ## 3. Development Workflow (The "Grit Way")
 - **Dependency Management:** `uv` is mandatory. Use `uv sync` and `uv run`.
@@ -47,8 +47,8 @@ Instead of Python loops, we use a single SQL query to find the first available d
 - **Mocking:** Always mock `subprocess.run` and `pathlib` in unit tests.
 - **CLI UX:**
   - Errors must go to `stderr`.
-  - Use Rich for dashboards.
-  - Provide non-interactive flags (`--target`, `--force`) for all prompts.
+  - Use Rich for high-fidelity dashboards.
+  - Provide non-interactive flags for all prompts.
 
 ## 4. Troubleshooting & Edge Cases
 - **`--amend`:** Grit intercepts and warns users that amends do not count as new commits.
@@ -57,9 +57,11 @@ Instead of Python loops, we use a single SQL query to find the first available d
 - **Infinite Loops:** The date allocator is bounded to 1 year forward.
 
 ## 5. Command Reference
-- `grit config`: Wizard & headless updates.
-- `grit commit <args>`: Transparent passthrough.
+- `grit config`: Settings management with --logs support.
+- `grit commit`: Interactive wizard with CommitScribe AI analysis.
 - `grit status`: Progress dashboard + future forecast.
-- `grit sync`: Multi-source state alignment.
-- `grit ungrit`: Secure teardown.
-
+- `grit sync`: Multi-source (Local/Remote) state reconciliation.
+- `grit log`: Human-readable enhanced git log.
+- `grit spread`: Historical redistribution.
+- `grit undo`: Safely revert last commit and state.
+- `grit ungrit`: Secure decommission.

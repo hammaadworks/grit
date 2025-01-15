@@ -1,215 +1,120 @@
 # 📖 User Guide
 
-Get started with Grit in three easy steps.
-
-![Git Push Meme](https://media.tenor.com/bK1RAdR_iP4AAAAC/dog-coding.gif)
+Build an unbreakable GitHub streak with Grit—the intelligent, high-fidelity git wrapper architected for professional consistency.
 
 ---
 
 ## 1. Initial Setup
 
-Before using Grit, you need to tell it your goals. Run the setup wizard:
+Configure your commitment boundaries using the interactive Control Center.
 
 ```bash
 $ grit config
 ```
 
-You will be prompted for four simple things:
+**Key Parameters:**
+1.  **Daily Target:** Your committed frequency of contributions per calendar day.
+2.  **Start Date:** The historical boundary for timeline backfilling.
+3.  **Allocation Strategy:** 
+    *   `today`: Prioritize filling recent gaps.
+    *   `start_date`: Fill gaps chronologically from the beginning.
+4.  **GitHub Username:** Required for remote contribution grid synchronization.
 
-1.  **Daily Target:** How many commits do you want per day?
-2.  **Start Date:** The historical boundary for backfilling (YYYY-MM-DD).
-3.  **Allocation Strategy:** Choose between `today` (fill recent gaps first) or `start_date` (fill from the beginning).
-4.  **GitHub Username:** Your public username to synchronize your contribution graph.
-
-!!! tip "Headless Setup for CI/CD"
-    You can bypass the interactive prompts entirely using flags:
+!!! tip "Headless Configuration"
+    For automated environments, use standard flags:
     ```bash
-    $ grit config --target 5 --start 2024-01-01 --username yourgithub --fill-from today
+    $ grit config --target 3 --start 2024-01-01 --username user --fill-from today
     ```
 
 ---
 
-## 2. Intelligence Dashboard (`grit dash`)
+## 2. Intelligence Dashboard (`grit status`)
 
-Grit includes a built-in, high-fidelity web dashboard that works completely offline. It provides deep insights into your commit velocity and pipeline.
-
-```bash
-$ grit dash
-```
-
-*Note: The dashboard runs in the background by default. Grit tracks the process ID (PID) so you can manage it easily.*
-
-- **Foreground Mode:** Run `grit dash --logs` to view server logs directly in your terminal.
-- **Stop Server:** Run `grit dash --stop` (or `-s`) to safely terminate any running background dashboard.
-- **Visual Velocity:** Interactive charts showing your last 30 days of work.
-- **Journey Progress:** Track exactly how many commits are pending to reach your "Green Wall" goal.
-- **Live Pipeline:** See where your next 10 commits will land before you even type them.
-
----
-
-## 3. Committing Code
-
-Grit is designed to be frictionless. You can use it as a silent wrapper, or let it do the heavy lifting for you.
-
-### The Interactive DevX Wizard (Recommended)
-Simply type `grit commit` with no arguments to launch the Interactive Wizard.
-
-```bash
-$ grit commit
-```
-1.  **File Picker:** Use your arrow keys to navigate and **Spacebar** to select which files to stage.
-    *   **Folding:** Use **Tab** or **Left/Right Arrow keys** to collapse and expand directories. This is extremely helpful for navigating deep project structures like `node_modules` or complex skill paths.
-2.  **Semantic Auto-Commit:** Choose a conventional commit type, or select `✨ Auto-generate (AI)` to let Grit read your diff and write the perfect message for you.
-3.  **Smart Push:** Grit will ask if you want to push immediately. If the remote rejects it, Grit will gracefully offer to `git pull --rebase` for you.
-
-### Standard Execution
-Use it exactly like standard Git to bypass the wizard:
-
-=== "Standard"
-    ```bash
-    grit commit -m "fix: resolve memory leak"
-    ```
-
-=== "Bypass Hooks"
-    ```bash
-    grit commit -m "wip" --no-verify
-    ```
-
-!!! success "How it works"
-    Grit automatically generates a valid Git timestamp in your local timezone, injects it into both `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`, and safely executes the commit. If the commit fails (e.g. pre-commit hook failure) or the HEAD hash doesn't change, Grit will **not** increment your daily counter.
-
----
-
-## 4. Visualizing History (`grit log`)
-
-Grit comes with a beautifully enhanced, human-readable git log on jetpack rollerskates. It addresses all the community issues of standard `git log` by providing a clear, colorful, and branched view of your repository history right in your terminal.
-
-```bash
-$ grit log
-```
-
-- **Visual Branches:** See exactly how your feature branches diverge and merge with color-coded graph lines.
-- **Human-Readable Times:** Commit dates are displayed in an easy-to-read format (e.g., "2 hours ago", "3 days ago").
-- **Clear Hashes & Tags:** Commit hashes, branches, and tags are brightly color-coded for quick scanning.
-- **Pass-through:** Just like `grit commit`, you can pass standard git log arguments (e.g., `grit log -n 10` or `grit log --author="Name"`).
-
----
-
-## 5. History Redistributor (`grit spread`)
-
-Finished a massive feature and made 10 commits in one night? Use `grit spread` to intelligently redistribute them across your historical gaps.
-
-```bash
-$ grit spread HEAD~5 --push
-```
-
-- **Analysis:** Grit scans the specified range of commits.
-- **Allocation:** It finds the next available slots in your history based on your `daily_target` and `fill_strategy`.
-- **Rewrite:** Grit performs an automated history rewrite using a safe "Shadow Branch" strategy.
-- **Atomic Sync:** Your local database is updated only if the rewrite succeeds.
-- **Remote Sync:** Use the `--push` (or `-p`) flag to automatically `git push --force-with-lease` after a successful rewrite.
-
-!!! warning "Rewriting History"
-    Like `git rebase`, this command rewrites commit hashes. If you have already pushed these commits, you will need to force push. Using the `--push` flag handles this safely for you.
-
----
-
-## 6. Quantum Undo (`grit undo`)
-
-Made a mistake? Committed to the wrong day? Use the panic button:
-
-```bash
-$ grit undo
-```
-
-This command safely performs a `git reset --soft HEAD~1` (keeping your files staged) and **decrements the commit count** in the Grit database, perfectly preserving your timeline.
-
-!!! warning "Push Protection"
-    If Grit detects that your commit has already been pushed to GitHub, it will warn you before allowing an undo to prevent you from rewriting public history.
-
----
-
-## 7. Checking Status
-
-Want to know how many commits you have left for the day, or view your overall journey progress?
+Monitor your commit velocity and pipeline with the built-in, high-fidelity terminal dashboard.
 
 ```bash
 $ grit status
 ```
 
-!!! tip "Skip Confirmations"
-    To bypass the interactive "View local repository state?" prompt and jump straight to the dashboard, use the yes flag:
-    ```bash
-    $ grit status --yes
-    ```
-
-**Example Output:**
-```text
-  █ █ █ ░ ░  3/5 today [OPTIMIZED]
-
-✦ Journey Progress: 42.5% ━━━━━━━━━━━━━━━━━━━━░░░░░░░░░░░░░░░░░░ 124 commits pending
-
-╭──────────────────── Commit Intelligence Pipeline ────────────────────╮
-│                                                                      │
-│    Date                  Timeline             Status         Load    │
-│    2026-04-06            today                   ◆            0/1    │
-│    2026-03-04            next                    ◇            0/1    │
-│    2026-03-05            then                    ◇            0/1    │
-│    2026-03-06            later                   ◇            0/1    │
-│                                                                      │
-╰──────────────────────────────────────────────────────────────────────╯
-```
+- **Visual Velocity:** Real-time metrics of your current daily target.
+- **Journey Progress:** Comprehensive tracking of pending commits toward your "Green Wall" goal.
+- **Commit Intelligence Pipeline:** Forecast of where your next sequence of commits will be allocated.
 
 ---
 
-## 8. Verifying Version
+## 3. CommitScribe AI (`grit commit`)
 
-To check which version of Grit you are currently running:
+Elevate your history with **CommitScribe**, a Distinguished System Architect AI (powered by Pydantic AI) that generates precise, architectural commit messages.
+
+### The Interactive DevX Wizard
+Run `grit commit` without arguments to launch the high-fidelity wizard.
+
+1.  **File Picker:** Fluidly stage files with arrow keys and **Spacebar**. Supports directory folding via **Tab**.
+2.  **CommitScribe Analysis:** Select `✨ Auto-generate (AI)` to trigger a deep-diff analysis.
+    *   **Architectural Wisdom:** Every message includes RATIONALE, IMPACT, and FUTURE implications.
+    *   **Real-Time Feedback:** Monitor analysis time with the built-in, non-blocking timer.
+3.  **Smart Distribution:** CommitScribe automatically calculates the optimal backdated timestamp to preserve your streak.
+
+---
+
+## 4. Professional Logging (`--logs`)
+
+Grit features a professional, system-wide logging engine powered by **Loguru**.
+
+- **Global Visibility:** Append `--logs` to any command for real-time internal diagnostics.
+- **Persistent Records:** Detailed `DEBUG` logs are always maintained in `~/.grit/logs/` with automatic rotation.
 
 ```bash
-$ grit --version
+$ grit sync --logs
 ```
 
 ---
 
-## Maintenance Commands
+## 5. History Redistribution (`grit spread`)
 
-### Self-Healing (`grit sync`)
+Redistribute a range of existing commits across historical gaps to repair your timeline.
 
-If you commit from a different computer, merge a PR on GitHub, or bypass Grit by using an IDE's source control tab, your local database will become out of sync. 
+```bash
+$ grit spread HEAD~10 --push
+```
 
-To fix this, run:
+- **Shadow Branch Strategy:** Executes rewrites on a temporary branch for maximum safety.
+- **Atomic Synchronization:** State is updated only after a successful git operation.
+- **Force-Push Protection:** Use `--push` to safely sync with your remote using `--force-with-lease`.
+
+---
+
+## 6. Quantum Undo (`grit undo`)
+
+Safely regress your last commit and perfectly restore your Grit state.
+
+```bash
+$ grit undo
+```
+*Grit detects pushed commits and warns you before allowing a history rewrite.*
+
+---
+
+## 7. Self-Healing Sync Engine (`grit sync`)
+
+Ensure your local state is perfectly aligned with both your local `git log` and your remote GitHub contribution grid.
 
 ```bash
 $ grit sync
 ```
-
-!!! info "Safe Merging"
-    Grit fetches your local `git log` and remote GitHub data, merging them using a strict `MAX(current, new)` rule. **It will never lower your commit count.**
-
-### Uninstallation (`grit ungrit`)
-
-If you want to completely wipe Grit's state and configuration:
-
-```bash
-$ grit ungrit
-```
-
-!!! warning "Scripted Teardown"
-    To bypass the confirmation prompt, use the force flag:
-    ```bash
-    $ grit ungrit --force
-    ```
+*Grit uses a MAX(local, remote, internal) rule to ensure your commit counts only ever move forward.*
 
 ---
 
-## 🗺️ Next Up: Dive Deeper
+## Maintenance & Integrity
 
-Ready to see how the sausage is made, or maybe contribute some code of your own?
+### Version Check
+```bash
+$ grit --version
+```
 
-<div class="grid cards" markdown>
-
--   :material-code-tags: **[Next Up: Developer Onboarding ➔](developer-guide.md)**
-    
-    Get your local environment running in under 2 minutes.
-</div>
+### Decommissioning (`grit ungrit`)
+Completely wipe all local Grit state and configuration.
+```bash
+$ grit ungrit --force
+```

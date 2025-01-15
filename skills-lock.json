@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "building-pydantic-ai-agents": {
+      "source": "pydantic/skills",
+      "sourceType": "github",
+      "computedHash": "ed668c022158bf31f755411d8808427badf575a72770ec5d58c57c30217b6e13"
+    },
     "cli-ux-designer": {
       "source": "sjungling/claude-plugins",
       "sourceType": "github",
