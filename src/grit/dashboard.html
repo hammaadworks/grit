@@ -385,8 +385,12 @@
                     <h3 class="text-lg font-bold" id="current-table-name">Select
                         a table</h3>
                     <div class="flex gap-4">
+                        <button id="refresh-db-btn" onclick="refreshCurrentTable()"
+                                class="bg-transparent border border-[#133838] text-[#14b8a6] text-[10px] font-black px-4 py-2 rounded uppercase hover:bg-[#14b8a6]/10 transition-all">
+                            Refresh Data
+                        </button>
                         <button onclick="addRow()"
-                                class="bg-[#14b8a6] text-black text-[10px] font-black px-4 py-2 rounded uppercase">
+                                class="bg-[#14b8a6] text-black text-[10px] font-black px-4 py-2 rounded uppercase hover:brightness-110">
                             Add Row
                         </button>
                     </div>
@@ -530,11 +534,27 @@
         } catch (e) { console.error('DB_LOAD_ERROR:', e); }
     }
 
+    async function refreshCurrentTable() {
+        if (!selectedTable) return alert('Select a table first');
+        const btn = document.getElementById('refresh-db-btn');
+        const original = btn.textContent;
+        btn.textContent = 'REFRESHING...';
+        btn.disabled = true;
+        
+        await loadTableData(selectedTable);
+        
+        setTimeout(() => {
+            btn.textContent = original;
+            btn.disabled = false;
+        }, 500);
+    }
+
     async function loadTableData(table) {
         selectedTable = table;
         document.getElementById('current-table-name').textContent = table.toUpperCase();
         try {
-            const response = await fetch(`/api/db/data?table=${table}`);
+            // FORCE REFRESH: Add timestamp to bypass browser cache
+            const response = await fetch(`/api/db/data?table=${table}&t=${Date.now()}`);
             const rows = await response.json();
 
             const header = document.getElementById('table-header');
@@ -542,12 +562,18 @@
             header.innerHTML = '';
             body.innerHTML = '';
 
-            if (rows.length > 0) {
-                // Dynamically determine columns based on the first row's length or hardcoded if empty
+            if (rows.length > 0 || table) {
+                // Fetch column names dynamically if possible, or use defaults
                 let cols = [];
                 if (table === 'config') cols = ['key', 'value'];
                 else if (table === 'commits') cols = ['date', 'count'];
-                else if (table === 'drafts') cols = ['diff_hash', 'message', 'timestamp'];
+                else if (table === 'drafts') cols = ['diff_hash', 'message', 'status', 'timestamp'];
+                else {
+                    // Generic column labeling for unknown tables
+                    if (rows.length > 0) {
+                        for (let i = 0; i < rows[0].length; i++) cols.push(`Col ${i+1}`);
+                    }
+                }
                 
                 cols.forEach(col => {
                     const th = document.createElement('th');
@@ -597,7 +623,7 @@
         let cols = [];
         if (table === 'config') cols = ['key', 'value'];
         else if (table === 'commits') cols = ['date', 'count'];
-        else if (table === 'drafts') cols = ['diff_hash', 'message', 'timestamp'];
+        else if (table === 'drafts') cols = ['diff_hash', 'message', 'status', 'timestamp'];
 
         for (let i = 0; i < row.length; i++) {
             const val = prompt(`Enter new value for ${cols[i]}:`, row[i]);
@@ -635,7 +661,7 @@
         let cols = [];
         if (selectedTable === 'config') cols = ['key', 'value'];
         else if (selectedTable === 'commits') cols = ['date', 'count'];
-        else if (selectedTable === 'drafts') cols = ['diff_hash', 'message', 'timestamp'];
+        else if (selectedTable === 'drafts') cols = ['diff_hash', 'message', 'status', 'timestamp'];
 
         for (const col of cols) {
             const val = prompt(`Enter ${col}:`);

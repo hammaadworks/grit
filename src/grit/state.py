@@ -39,36 +39,55 @@ class StateManager:
                                 CREATE TABLE IF NOT EXISTS drafts (
                                     diff_hash TEXT PRIMARY KEY,
                                     message TEXT,
+                                    status TEXT DEFAULT 'pending',
                                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                                 )
                             '''
                 )
+            
+            # Migration: Ensure 'status' column exists for existing databases
+            cursor = self._conn.execute("PRAGMA table_info(drafts)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'status' not in columns:
+                self._conn.execute("ALTER TABLE drafts ADD COLUMN status TEXT DEFAULT 'success'")
 
-    def get_draft(self, diff_hash: str) -> Optional[str]:
+    def get_draft(self, diff_hash: str) -> Optional[dict]:
         """Retrieve a cached commit draft for a specific diff."""
-        cursor = self._conn.execute('SELECT message FROM drafts WHERE diff_hash = ?', (diff_hash,))
+        cursor = self._conn.execute('SELECT message, status, timestamp FROM drafts WHERE diff_hash = ?', (diff_hash,))
         row = cursor.fetchone()
-        return row[0] if row else None
+        if row:
+            return {"message": row[0], "status": row[1], "timestamp": row[2]}
+        return None
 
-    def get_all_drafts(self) -> list[tuple]:
-        """Retrieve all cached commit drafts."""
-        cursor = self._conn.execute('SELECT diff_hash, message, timestamp FROM drafts ORDER BY timestamp DESC')
-        return cursor.fetchall()
-
-    def set_draft(self, diff_hash: str, message: str):
+    def set_draft(self, diff_hash: str, message: str, status: str = "success"):
         """Cache a commit draft for a specific diff. Enforces a 50-entry FIFO limit."""
+        # 1. Identify which diff_hashes are about to be evicted
+        cursor = self._conn.execute(
+            '''
+            SELECT diff_hash FROM drafts 
+            WHERE diff_hash NOT IN (
+                SELECT diff_hash FROM drafts 
+                ORDER BY timestamp DESC 
+                LIMIT 49
+            )
+        '''
+        )
+        to_evict = [row[0] for row in cursor.fetchall()]
+
         with self._conn:
-            # 1. Insert/Update the new draft
+            # 2. Insert/Update the new draft
             self._conn.execute(
                 '''
-                                INSERT INTO drafts (diff_hash, message, timestamp)
-                                VALUES (?, ?, CURRENT_TIMESTAMP)
-                                ON CONFLICT(diff_hash) DO UPDATE SET message=excluded.message, timestamp=excluded.timestamp
-                            ''', (diff_hash, message)
+                                INSERT INTO drafts (diff_hash, message, status, timestamp)
+                                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                                ON CONFLICT(diff_hash) DO UPDATE SET 
+                                    message=excluded.message, 
+                                    status=excluded.status,
+                                    timestamp=excluded.timestamp
+                            ''', (diff_hash, message, status)
                 )
             
-            # 2. Enforce 50-entry limit (FIFO)
-            # Delete entries that are NOT in the top 50 most recent
+            # 3. Enforce 50-entry limit (FIFO)
             self._conn.execute(
                 '''
                 DELETE FROM drafts 
@@ -79,6 +98,13 @@ class StateManager:
                 )
                 '''
             )
+        
+        # 4. Cleanup associated log files for evicted drafts
+        for h in to_evict:
+            log_file = self.db_path.parent / f"ai_bg_{h}.log"
+            try:
+                log_file.unlink(missing_ok=True)
+            except: pass
 
     def clear_old_drafts(self, hours: int = 24):
         """Cleanup old drafts to keep the DB lean."""

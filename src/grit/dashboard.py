@@ -47,12 +47,18 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
             query = parse_qs(urlparse(self.path).query)
             table = query.get('table', [None])[0]
-            if table in ['config', 'commits', 'drafts']:
+            if table:
+                # Sanitize table name to prevent SQL injection (only allow alphanumeric + underscore)
+                import re
+                if not re.match(r'^[a-zA-Z0-9_]+$', table):
+                    self.send_error(400, "Invalid table name")
+                    return
+                    
                 cursor = self.state._conn.execute(f"SELECT * FROM {table}")
                 rows = cursor.fetchall()
                 self.send_json(rows)
             else:
-                self.send_error(400, "Invalid table")
+                self.send_error(400, "Missing table parameter")
         elif self.path == '/' or self.path == '/dashboard':
             # Serve the dashboard.html file
             html_path = Path(__file__).parent / "dashboard.html"
