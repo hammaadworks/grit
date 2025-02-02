@@ -39,7 +39,14 @@ def generate_commit_message(
     clean_url = None if base_url in ["Not configured", ""] else base_url
     clean_key = None if api_key in ["Not configured", ""] else api_key
 
-    provider_prefix = "ollama" if clean_url and "11434" in clean_url else "openai"
+    # Detect provider based on URL or model name
+    if clean_url and "11434" in clean_url:
+        provider_prefix = "ollama"
+    elif "gemini" in model_name.lower():
+        provider_prefix = "google-gla"
+    else:
+        provider_prefix = "openai"
+
     full_model_string = f"{provider_prefix}:{model_name}"
 
     # =========================
@@ -56,10 +63,12 @@ def generate_commit_message(
             "OLLAMA_KEEP_ALIVE": "10m", # Keep in memory longer for back-to-back commits
             "OLLAMA_MAX_LOADED_MODELS": "1",
         })
-        # Removed hardcoded OLLAMA_NUM_THREAD to let Ollama auto-optimize for M1/M2/M3
-
         if clean_url:
             env_vars["OLLAMA_BASE_URL"] = clean_url
+    elif provider_prefix == "google-gla":
+        if clean_key:
+            env_vars["GEMINI_API_KEY"] = clean_key
+            env_vars["GOOGLE_API_KEY"] = clean_key
     elif provider_prefix == "openai":
         if clean_key:
             env_vars["OPENAI_API_KEY"] = clean_key
