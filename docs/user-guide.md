@@ -20,40 +20,47 @@ $ grit config
     *   `start_date`: Fill gaps chronologically from the beginning.
 4.  **GitHub Username:** Required for remote contribution grid synchronization.
 
-!!! tip "Headless Configuration"
-    For automated environments, use standard flags:
+!!! tip "AI Configuration"
+    Grit supports Gemini, OpenAI, and Ollama. Configure your provider via:
     ```bash
-    $ grit config --target 3 --start 2024-01-01 --username user --fill-from today
+    $ grit config --ai-key YOUR_API_KEY --ai-model gemini-1.5-flash
     ```
 
 ---
 
-## 2. Intelligence Dashboard (`grit status`)
+## 2. Web Intelligence Dashboard (`grit dash`)
 
-Monitor your commit velocity and pipeline with the built-in, high-fidelity terminal dashboard.
+Launch a modern, high-fidelity web interface to monitor your graph integrity.
 
 ```bash
-$ grit status
+$ grit dash
 ```
 
-- **Visual Velocity:** Real-time metrics of your current daily target.
-- **Journey Progress:** Comprehensive tracking of pending commits toward your "Green Wall" goal.
-- **Commit Intelligence Pipeline:** Forecast of where your next sequence of commits will be allocated.
+- **Visual Velocity:** Real-time metrics and activity charts for the last 30 days.
+- **Pipeline Analysis:** See exactly where your next commits will be allocated.
+- **Local Database Inspector:** Directly view and edit your system state (config, commits, drafts).
 
 ---
 
 ## 3. CommitScribe AI (`grit commit`)
 
-Elevate your history with **CommitScribe**, a Distinguished System Architect AI (powered by Pydantic AI) that generates precise, architectural commit messages.
+Elevate your history with **CommitScribe**, an AI agent that generates precise, architectural commit messages.
+
+### Background Generation
+Run AI generation in a background thread to stay in your flow.
+```bash
+$ grit commit --ai
+```
+- **macOS Notifications:** CommitScribe notifies you when your draft is ready.
+- **Live Logs:** Monitor background progress with `tail -f ~/.config/grit/ai_bg_<hash>.log`.
 
 ### The Interactive DevX Wizard
 Run `grit commit` without arguments to launch the high-fidelity wizard.
 
 1.  **File Picker:** Fluidly stage files with arrow keys and **Spacebar**. Supports directory folding via **Tab**.
 2.  **CommitScribe Analysis:** Select `✨ Auto-generate (AI)` to trigger a deep-diff analysis.
-    *   **Architectural Wisdom:** Every message includes RATIONALE, IMPACT, and FUTURE implications.
-    *   **Real-Time Feedback:** Monitor analysis time with the built-in, non-blocking timer.
-3.  **Smart Distribution:** CommitScribe automatically calculates the optimal backdated timestamp to preserve your streak.
+3.  **Draft Caching:** Grit hashes your diffs. If you've generated a draft before, it loads instantly from a 50-entry FIFO cache.
+4.  **Smart Distribution:** CommitScribe automatically calculates the optimal backdated timestamp to preserve your streak.
 
 ---
 
