@@ -165,13 +165,16 @@ def test_ai_commit_generation_structured(clean_state, mocker):
     # Mock staged diff and picker
     mocker.patch("grit.commands.commit.get_status_files", return_value=[("file.py", "modified")])
     mocker.patch("grit.commands.commit.get_staged_files", return_value=["file.py"])
+    mocker.patch("grit.commands.commit.get_staged_diff", return_value="fake diff")
     mocker.patch("grit.commands.commit._interactive_stage_picker", return_value={"file.py"})
     
     # Mock selection menu to pick AI generation
     # Options: ["✨ Auto-generate (AI)", "feat", "fix", ...]
+    # _interactive_commit_message_flow -> picks "✨ Auto-generate (AI)"
+    # _edit_ai_commit_message -> picks "✅ Confirm & Commit" (this returns the message to _interactive_commit_message_flow)
     mocker.patch("grit.commands.commit.run_selection_menu", side_effect=[
-        ("✨ Auto-generate (AI)", 0), # First call: Pick AI
-        ("✅ Confirm & Commit", 0)    # Second call: Confirm AI draft
+        ("✨ Auto-generate (AI)", 0), # First call: _interactive_commit_message_flow picks AI
+        ("✅ Confirm & Commit", 0)    # Second call: _edit_ai_commit_message picks confirm
     ])
 
     # Mock the AI generation call

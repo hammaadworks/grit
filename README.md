@@ -9,10 +9,12 @@ Instead of generating fake work, Grit takes your *real* work and intelligently d
 ## 🚀 The Features
 
 - **No More Ghost Towns:** Set a daily commit target and let Grit mathematically distribute your commits.
-- **O(1) Allocation Engine:** Uses a blazing-fast recursive SQLite query to find the optimal next commit date instantly. No Python loops.
-- **Self-Healing Sync:** Scrapes your public GitHub contribution graph and local `git log`, merging them to prevent Grit from ever overwriting a day you've already committed to.
-- **History Redistributor:** Use `grit spread` to take a batch of existing commits and automatically distribute them across your historical gaps.
-- **Zero-Friction Wrapper:** Transparently passes all arguments (`-m`, `--no-verify`, etc.) directly to vanilla `git commit`.
+- **AI-Powered Semantic Commits:** Built-in support for Gemini, OpenAI, and Ollama. Grit can analyze your diffs and generate perfect Conventional Commits in the background.
+- **O(1) Allocation Engine:** Uses a blazing-fast SQL engine to find the optimal next commit date instantly.
+- **Interactive Dashboard:** A beautiful, high-fidelity visualization GUI to monitor your graph integrity and pipeline.
+- **Self-Healing Sync:** Scrapes your public GitHub graph to ensure Grit never overwrites days you've already filled.
+- **History Redistributor:** Use `grit spread` to take a batch of existing commits and automatically distribute them across historical gaps.
+- **Zero-Friction Wrapper:** Transparently passes all arguments directly to vanilla `git commit`.
 
 ## 📦 Installation
 
@@ -29,15 +31,17 @@ Alternatively, you can download the latest source code or wheels from [GitHub Re
 ## 🛠️ Quick Start
 
 1. **Configure Grit:**
-   Run the interactive setup wizard to set your daily target and start date.
+   Run the interactive setup wizard or use headless flags for AI configuration.
    ```bash
-   grit config
+   grit config --ai-key YOUR_KEY --ai-model gemini-1.5-flash
    ```
 
 2. **Start Committing:**
-   Use `grit commit` exactly as you would use `git commit`. Grit handles the rest.
+   Use `grit commit` or let the AI do the work with the background flag.
    ```bash
    grit commit -m "feat: add super cool new feature"
+   # Or go pragmatic with ai
+   grit commit --ai
    ```
 
 3. **Check your Status:**

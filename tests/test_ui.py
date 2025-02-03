@@ -73,10 +73,13 @@ class TestUI(unittest.TestCase):
 
     @patch('sys.stdout.write')
     def test_reset_terminal_title(self, mock_write):
+        import grit.ui
         from grit.ui import reset_terminal_title
         with patch('sys.stdout.isatty', return_value=True):
+            # We need to set _title_pushed to True so reset_terminal_title actually writes to stdout
+            grit.ui._title_pushed = True
             reset_terminal_title()
-            mock_write.assert_called_with("\033]0;\007")
+            mock_write.assert_called_with("\033[23;0t")
 
     @patch('grit.ui.Live')
     @patch('random.random', return_value=0.9)
