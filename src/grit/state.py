@@ -61,6 +61,9 @@ class StateManager:
 
     def set_draft(self, diff_hash: str, message: str, status: str = "success"):
         """Cache a commit draft for a specific diff. Enforces a 50-entry FIFO limit."""
+        import datetime
+        now_iso = datetime.datetime.now().astimezone().isoformat(timespec='seconds')
+        
         # 1. Identify which diff_hashes are about to be evicted
         cursor = self._conn.execute(
             '''
@@ -79,12 +82,12 @@ class StateManager:
             self._conn.execute(
                 '''
                                 INSERT INTO drafts (diff_hash, message, status, timestamp)
-                                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                                VALUES (?, ?, ?, ?)
                                 ON CONFLICT(diff_hash) DO UPDATE SET 
                                     message=excluded.message, 
                                     status=excluded.status,
                                     timestamp=excluded.timestamp
-                            ''', (diff_hash, message, status)
+                            ''', (diff_hash, message, status, now_iso)
                 )
             
             # 3. Enforce 50-entry limit (FIFO)

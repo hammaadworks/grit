@@ -54,7 +54,10 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_error(400, "Invalid table name")
                     return
                     
-                cursor = self.state._conn.execute(f"SELECT * FROM {table}")
+                if table == 'drafts':
+                    cursor = self.state._conn.execute("SELECT * FROM drafts ORDER BY timestamp DESC")
+                else:
+                    cursor = self.state._conn.execute(f"SELECT * FROM {table}")
                 rows = cursor.fetchall()
                 self.send_json(rows)
             else:
@@ -121,8 +124,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 elif table == 'drafts':
                     with self.state._conn as conn:
                         conn.execute(
-                            "INSERT OR REPLACE INTO drafts (diff_hash, message, timestamp) VALUES (?, ?, ?)",
-                            (row[0], row[1], row[2])
+                            "INSERT OR REPLACE INTO drafts (diff_hash, message, status, timestamp) VALUES (?, ?, ?, ?)",
+                            (row[0], row[1], row[2], row[3])
                         )
                 else:
                     raise Exception("Invalid table")

@@ -33,6 +33,7 @@ def get_banner_layout() -> Table:
     grid.add_column(justify="left")
 
     # ASCII Art
+    grid.add_row("")
     grid.add_row(Text("    ██████╗ ██████╗ ██╗████████╗", style=BRAND_COLOR))
     grid.add_row(Text("    ██╔════╝ ██╔══██╗██║╚══██╔══╝", style=BRAND_COLOR))
     grid.add_row(Text("    ██║  ███╗██████╔╝██║   ██║   ", style=BRAND_COLOR))
@@ -44,7 +45,7 @@ def get_banner_layout() -> Table:
     tagline = Text()
     tagline.append("    ✦ ", style=BRAND_COLOR)
     tagline.append(f"v{__version__}", style="dim")
-    tagline.append(" — Intelligently distribute your commits", style="dim")
+    tagline.append(" - Intelligently distribute your commits", style="dim")
     grid.add_row(tagline)
     grid.add_row("")
 
@@ -80,13 +81,16 @@ def suppress_title_reset():
 
 def reset_terminal_title():
     """
-    Resets the terminal title by popping from the stack on exit.
+    Resets the terminal title by popping from the stack.
+    Relies on terminal stacking support (xterm/iTerm/etc) to restore the previous title.
     """
+    global _title_pushed
     if sys.stdout.isatty() and not _suppress_title_reset:
         if _title_pushed:
-            # Restore title from stack
+            # Pop from stack (xterm extension) - restores previous title
             sys.stdout.write("\033[23;0t")
             sys.stdout.flush()
+            _title_pushed = False
 
 
 
