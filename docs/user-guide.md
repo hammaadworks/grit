@@ -100,16 +100,17 @@ $ grit log
 Finished a massive feature and made 10 commits in one night? Use `grit spread` to intelligently redistribute them across your historical gaps.
 
 ```bash
-$ grit spread HEAD~5
+$ grit spread HEAD~5 --push
 ```
 
 - **Analysis:** Grit scans the specified range of commits.
 - **Allocation:** It finds the next available slots in your history based on your `daily_target` and `fill_strategy`.
 - **Rewrite:** Grit performs an automated history rewrite using a safe "Shadow Branch" strategy.
 - **Atomic Sync:** Your local database is updated only if the rewrite succeeds.
+- **Remote Sync:** Use the `--push` (or `-p`) flag to automatically `git push --force-with-lease` after a successful rewrite.
 
 !!! warning "Rewriting History"
-    Like `git rebase`, this command rewrites commit hashes. If you have already pushed these commits, you will need to `git push --force`.
+    Like `git rebase`, this command rewrites commit hashes. If you have already pushed these commits, you will need to force push. Using the `--push` flag handles this safely for you.
 
 ---
 
@@ -136,6 +137,12 @@ Want to know how many commits you have left for the day, or view your overall jo
 $ grit status
 ```
 
+!!! tip "Skip Confirmations"
+    To bypass the interactive "View local repository state?" prompt and jump straight to the dashboard, use the yes flag:
+    ```bash
+    $ grit status --yes
+    ```
+
 **Example Output:**
 ```text
   █ █ █ ░ ░  3/5 today [OPTIMIZED]
@@ -151,6 +158,16 @@ $ grit status
 │    2026-03-06            later                   ◇            0/1    │
 │                                                                      │
 ╰──────────────────────────────────────────────────────────────────────╯
+```
+
+---
+
+## 8. Verifying Version
+
+To check which version of Grit you are currently running:
+
+```bash
+$ grit --version
 ```
 
 ---

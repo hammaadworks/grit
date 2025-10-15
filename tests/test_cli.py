@@ -55,14 +55,14 @@ def test_interactive_setup_flow(clean_state, mocker):
     # The new TUI sequence with 'Allocation Strategy' toggle:
     # 0: target. Press Enter. Mock returns "5".
     # 1: start. Press Down, Enter. Mock returns "2024-01-01".
-    # 2: fill. Press Down, Enter. Mock returns "today".
+    # 2: fill. Press Down, Enter. (Toggles instantly, no input required)
     # 3: user. Press Down, Enter. Mock returns "testuser".
     # Press 'S' to save and exit.
     keys = ['\r', '\x1b[B', '\r', '\x1b[B', '\r', '\x1b[B', '\r', 's']
     mocker.patch("grit.commands.config.get_key", side_effect=keys)
 
-    # Mock input for the edits
-    mocker.patch("builtins.input", side_effect=["5", "2024-01-01", "today", "testuser"])
+    # Mock input for the edits (only 3 calls now because 'fill' is a toggle)
+    mocker.patch("builtins.input", side_effect=["5", "2024-01-01", "testuser"])
 
     result = runner.invoke(app, ["config"])
 
@@ -71,6 +71,7 @@ def test_interactive_setup_flow(clean_state, mocker):
     # Verify DB was updated
     assert clean_state.get_config("daily_target") == "5"
     assert clean_state.get_config("start_date") == "2024-01-01"
+    # Fill strategy toggles from 'start_date' to 'today'
     assert clean_state.get_config("fill_strategy") == "today"
     assert clean_state.get_config("github_username") == "testuser"
 
@@ -99,14 +100,15 @@ def test_wizard_staged_files_interception(clean_state, mocker):
     mocker.patch("grit.commands.commit.get_unstaged_files", return_value=["staged.txt", "unstaged.txt"])
     mocker.patch("grit.commands.commit.get_staged_files", return_value=["staged.txt"])
 
-    # Just mock get_key to abort immediately with 'q'
+    # Mock Live and get_key to abort immediately with 'q'
+    mock_live = mocker.patch("grit.commands.commit.Live")
     mocker.patch("grit.commands.commit.get_key", return_value='q')
     
     # Run the command
     result = runner.invoke(app, ["commit"])
 
-    # Check that file picker was shown
-    assert "Select files to stage" in result.stdout
+    # Check that Live was used for file picking
+    assert mock_live.called
     assert "Aborted." in result.stdout
 
 def test_cli_ungrit_interactive(clean_state):

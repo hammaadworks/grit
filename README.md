@@ -41,18 +41,24 @@ Alternatively, you can download the latest source code or wheels from [GitHub Re
    ```
 
 3. **Check your Status:**
-   View your current daily progress and see where your next commit will land.
+   View your current daily progress and see where your next commit will land. Use `-y` to skip the repository state prompt.
    ```bash
-   grit status
+   grit status -y
    ```
 
-4. **Visualize History:**
+4. **Verify Version:**
+   Check your current Grit version.
+   ```bash
+   grit --version
+   ```
+
+5. **Visualize History:**
    See a beautiful, branching, and colorful view of your repository history.
    ```bash
    grit log
    ```
 
-5. **Launch the Dashboard:**
+6. **Launch the Dashboard:**
    Open the high-fidelity visualization GUI. It launches in the background by default!
    ```bash
    grit dash

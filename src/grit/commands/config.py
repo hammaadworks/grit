@@ -7,8 +7,8 @@ from rich.text import Text
 
 from grit.state import StateManager
 from grit.sync import sync_historical_data
-from grit.ui import (BRAND_COLOR, console, ERROR_COLOR, get_key, SUCCESS_COLOR,
-                     WARN_COLOR)
+from grit.ui import (ACCENT_COLOR, BRAND_COLOR, console, ERROR_COLOR, get_key,
+                     get_banner_layout, print_banner, SUCCESS_COLOR, WARN_COLOR)
 
 
 def validate_date(date_text: str) -> bool:
@@ -60,53 +60,66 @@ def run_config_interactive(state: StateManager):
          "key": "ai_model", "default": "Not configured"},
     ]
 
+    # Session State: Load everything into memory first.
+    # We only write to disk when the user explicitly saves with 'S'.
+    session_config = {
+        opt["key"]: state.get_config(opt["key"]) or opt["default"]
+        for opt in options
+    }
+
     selected_idx = 0
     error_msg = ""
 
-    # Clear screen for immersive experience
-    console.clear()
-
-    with Live(auto_refresh=False, console=console, screen=False) as live:
+    with Live(auto_refresh=False, console=console, screen=True) as live:
         while True:
             # 1. Build the Menu UI
-            menu_grid = Table.grid(expand=True)
-            menu_grid.add_column(justify="left")
+            grid = Table.grid(expand=True)
+            grid.add_column(justify="left")
 
-            # Header
-            header = Text()
-            header.append("✦ ", style=BRAND_COLOR)
-            header.append("GRIT CONTROL CENTER", style="bold white")
-            menu_grid.add_row(Padding(header, (1, 0, 1, 0)))
+            # Header / Banner (Included in Live grid to ensure persistence in alternate screen)
+            grid.add_row(get_banner_layout())
+
+            # Settings Table
+            table = Table(box=None, padding=(0, 2), show_header=False, expand=True)
+            table.add_column("Cursor", width=3)
+            table.add_column("Setting", width=25)
+            table.add_column("Value")
 
             for i, opt in enumerate(options):
-                val = state.get_config(opt["key"]) or opt["default"]
+                val = session_config[opt["key"]]
                 is_selected = (i == selected_idx)
 
-                # Render item
-                item_text = Text()
-                prefix = " > " if is_selected else "   "
+                cursor = " ▶ " if is_selected else "   "
                 style = f"bold {BRAND_COLOR}" if is_selected else "dim"
+                val_style = "bold white" if is_selected else "dim"
 
-                item_text.append(prefix, style=style)
-                item_text.append(f"{opt['title']:<25}", style=style)
-                item_text.append(f"{val}", style="white" if is_selected else "dim")
-
-                menu_grid.add_row(item_text)
+                table.add_row(
+                    Text(cursor, style=style),
+                    Text(opt["title"], style=style),
+                    Text(str(val), style=val_style)
+                )
+                
                 if is_selected:
-                    menu_grid.add_row(
-                        Padding(f"   [dim]{opt['desc']}[/]", (0, 0, 1, 0))
-                        )
+                    table.add_row(
+                        "",
+                        Text(f"└─ {opt['desc']}", style="dim italic"),
+                        ""
+                    )
+
+            grid.add_row(Padding(table, (0, 2)))
 
             # Footer / Help
-            footer = Text()
-            footer.append(
-                "\n [↑↓] Navigate  [Enter] Edit  [S] Sync & Save  [Q] Exit", style="dim"
-                )
+            footer = Table.grid(expand=True)
+            help_text = Text("\n [↑↓] Navigate  [Enter] Edit/Toggle  [S] Sync & Save  [Q] Discard & Exit", style="dim")
+            footer.add_row(Padding(help_text, (0, 4)))
+            
             if error_msg:
-                footer.append(f"\n\n [bold {ERROR_COLOR}]✗ {error_msg}[/]")
-            menu_grid.add_row(footer)
+                err_text = Text(f"✗ {error_msg}", style=f"bold {ERROR_COLOR}")
+                footer.add_row(Padding(err_text, (1, 4)))
+                
+            grid.add_row(footer)
 
-            live.update(menu_grid, refresh=True)
+            live.update(grid, refresh=True)
 
             # 2. Handle Input
             try:
@@ -115,6 +128,7 @@ def run_config_interactive(state: StateManager):
                 break
 
             if key == 'q' or key == 'Q':
+                # Explicitly do NOT save anything to state here.
                 break
             elif key == '\x1b[A':  # Up
                 selected_idx = (selected_idx - 1) % len(options)
@@ -122,31 +136,41 @@ def run_config_interactive(state: StateManager):
             elif key == '\x1b[B':  # Down
                 selected_idx = (selected_idx + 1) % len(options)
                 error_msg = ""
-            elif key == '\r':  # Enter (Edit)
+            elif key == '\r':  # Enter (Edit/Toggle)
                 opt = options[selected_idx]
-                live.stop()
-                new_val = input(
-                    f" Edit {opt['title']} "
-                    f"(current: {state.get_config(opt['key']) or opt['default']}): "
-                    ).strip()
-
-                # Validation
-                if opt["id"] == "target" and not validate_int(new_val):
-                    error_msg = "Target must be a positive integer."
-                elif opt["id"] == "start" and not validate_date(new_val):
-                    error_msg = "Date must be YYYY-MM-DD."
-                elif opt["id"] == "fill" and new_val not in ["today", "start_date"]:
-                    error_msg = "Fill strategy must be 'today' or 'start_date'."
-                elif new_val:
-                    state.set_config(opt["key"], new_val)
+                
+                if opt["id"] == "fill":
+                    # Instant toggle for strategy (Session only)
+                    current = session_config[opt["key"]]
+                    new_val = "today" if current == "start_date" else "start_date"
+                    session_config[opt["key"]] = new_val
                     error_msg = ""
+                else:
+                    live.stop()
+                    current_val = session_config[opt["key"]]
+                    console.print(f"\n [bold {ACCENT_COLOR}]Editing {opt['title']}[/]")
+                    console.print(f" [dim]Current: {current_val}[/]")
+                    new_val = input(f" New value: ").strip()
 
-                live.start()
+                    # Validation
+                    if opt["id"] == "target" and not validate_int(new_val):
+                        error_msg = "Target must be a positive integer."
+                    elif opt["id"] == "start" and not validate_date(new_val):
+                        error_msg = "Date must be YYYY-MM-DD."
+                    elif new_val:
+                        session_config[opt["key"]] = new_val
+                        error_msg = ""
+
+                    live.start()
             elif key == 's' or key == 'S':
-                # Save & Sync
+                # Persist Session to Database
+                for k, v in session_config.items():
+                    state.set_config(k, v)
+
                 live.stop()
-                username = state.get_config("github_username")
-                start_date = state.get_config("start_date")
+                print_banner()
+                username = session_config["github_username"]
+                start_date = session_config["start_date"]
 
                 if username and username != "Not configured" and start_date:
                     with console.status(
@@ -165,6 +189,6 @@ def run_config_interactive(state: StateManager):
                         )
 
                 import time
-
                 time.sleep(1)
                 break
+
