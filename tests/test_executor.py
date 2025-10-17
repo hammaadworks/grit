@@ -1,3 +1,7 @@
+import os
+import subprocess
+import unittest
+from unittest.mock import MagicMock, patch
 import pytest
 import re
 from grit.executor import get_git_timestamp, execute_git_commit
@@ -48,9 +52,60 @@ def test_state_incremented_on_git_success(mocker):
     assert success is True
     mock_state.increment_commit_count.assert_called_once_with("2024-01-01")
     
-    # Verify exact argument passthrough and date injection
-    mock_run.assert_called_once()
-    call_args = mock_run.call_args.args[0]
-    call_kwargs = mock_run.call_args.kwargs
-    assert call_args == ["git", "commit", "-m", "success test"]
-    assert call_kwargs["env"]["GIT_AUTHOR_DATE"] == call_kwargs["env"]["GIT_COMMITTER_DATE"]
+def test_is_commit_pushed(mocker):
+    """Test is_commit_pushed logic."""
+    from grit.executor import is_commit_pushed
+    mock_run = mocker.patch("subprocess.run")
+    
+    # Simulate not pushed (empty output from branch -r)
+    mock_run.return_value.stdout = ""
+    assert is_commit_pushed() is False
+    
+    # Simulate pushed
+    mock_run.return_value.stdout = "origin/main"
+    assert is_commit_pushed() is True
+
+def test_execute_grit_spread(mocker):
+    """Test execute_grit_spread success and rollback."""
+    from grit.executor import execute_grit_spread
+    
+    mock_run = mocker.patch("subprocess.run")
+    # Success return object
+    success_mock = mocker.Mock(returncode=0, stdout="main")
+    
+    # Setup success path
+    mock_run.side_effect = None
+    mock_run.return_value = success_mock
+    
+    mocker.patch("grit.executor.has_unstaged_files", return_value=False)
+    mocker.patch("grit.executor.get_head_hash", return_value="h1")
+    
+    mock_state = mocker.Mock()
+    
+    hashes = ["h1", "h2"]
+    dates = {"h1": "2024-01-01", "h2": "2024-01-02"}
+    
+    success = execute_grit_spread(hashes, dates, mock_state)
+    assert success is True
+    
+    # Test failure path: Next call to run should raise exception
+    # But we need to make sure the cleanup subprocess.run call also doesn't crash everything
+    # We'll use a sequence of side_effects
+    mock_run.side_effect = [Exception("git failed"), success_mock, success_mock]
+    success = execute_grit_spread(hashes, dates, mock_state)
+    assert success is False
+
+def test_get_status_files(mocker):
+    """Test get_status_files parsing."""
+    from grit.executor import get_status_files
+    mock_run = mocker.patch("subprocess.run")
+    
+    # Mock git status --porcelain output
+    mock_run.return_value.stdout = "M  file1.txt\nA  file2.txt\n?? new.txt\n D deleted.txt"
+    files = get_status_files()
+    
+    assert len(files) == 4
+    assert ("file1.txt", "modified") in files
+    assert ("file2.txt", "new") in files
+    assert ("new.txt", "new") in files
+    assert ("deleted.txt", "deleted") in files

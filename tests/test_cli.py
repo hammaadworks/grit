@@ -13,7 +13,8 @@ def clean_state(tmp_path, mocker):
     
     # Patch the global state object in cli.py to use our isolated DB
     mocker.patch("grit.cli.state", mock_state)
-    return mock_state
+    yield mock_state
+    mock_state.close()
 
 def test_cli_first_run_interception(clean_state, mocker):
     """If no DB config exists, grit commit launches config TUI."""
@@ -41,7 +42,7 @@ def test_cli_amend_warning(clean_state, mocker):
     result = runner.invoke(app, ["commit", "--amend", "-m", "fix"])
     
     # Check that the specific warning panel was output
-    assert "Amend detected" in result.stdout
+    assert "Amend detected" in result.output
     
     # Check that git commit --amend was still actually executed
     calls = [call.args[0] for call in mock_run.mock_calls if call.args]

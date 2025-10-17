@@ -6,6 +6,9 @@ import Image from "next/image"; // Import Image component
 export const metadata: Metadata = {
   title: "Grit | The Intelligent Git Wrapper",
   description: "Keep your GitHub graph perfectly consistent with a unified backdated history.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

@@ -53,11 +53,14 @@ uv run grit status
 
 ## ✅ 3. Running Tests
 
-Grit uses Test-Driven Development (TDD) via `pytest` and `pytest-mock`. **All tests must pass before opening a PR.**
+Grit uses Test-Driven Development (TDD) via `pytest`, `pytest-mock`, and `pytest-cov`. **All tests must pass and coverage must be at least 90% before opening a PR.**
 
 ```bash
 # Run the entire test suite
 uv run pytest tests/ -v
+
+# Run with coverage report (target 90%+)
+uv run pytest --cov=src/grit --cov-report=term-missing --cov-fail-under=90
 ```
 
 !!! tip "Test Structure"

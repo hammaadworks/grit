@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from rich.table import Table
-from grit.ui import get_banner_layout, run_text_input
+from grit.ui import get_banner_layout, run_text_input, run_selection_menu
 import sys
 
 class TestUI(unittest.TestCase):
@@ -35,6 +35,45 @@ class TestUI(unittest.TestCase):
         
         result = run_text_input("Title")
         self.assertEqual(result, "ab")
+
+    @patch('grit.ui.get_key')
+    @patch('grit.ui.Live')
+    def test_selection_menu(self, mock_live, mock_get_key):
+        # Simulate: Down, then Enter
+        mock_get_key.side_effect = ['\x1b[B', '\r']
+        
+        options = ["Opt1", "Opt2", "Opt3"]
+        choice, idx = run_selection_menu("Title", options)
+        
+        self.assertEqual(choice, "Opt2")
+        self.assertEqual(idx, 1)
+
+    @patch('grit.ui.get_key')
+    @patch('grit.ui.Live')
+    def test_selection_menu_abort(self, mock_live, mock_get_key):
+        # Simulate: Q
+        mock_get_key.side_effect = ['q']
+        
+        options = ["Opt1", "Opt2"]
+        choice, idx = run_selection_menu("Title", options)
+        
+        self.assertIsNone(choice)
+        self.assertEqual(idx, -1)
+
+    @patch('grit.ui.Live')
+    @patch('random.random', return_value=0.9)
+    @patch('random.choice', return_value='✨')
+    @patch('time.sleep', return_value=None)
+    def test_victory_animation(self, mock_sleep, mock_choice, mock_random, mock_live):
+        from grit.ui import show_victory_animation
+        
+        # Setup Live mock to work as context manager
+        mock_live_instance = mock_live.return_value
+        mock_live_instance.__enter__.return_value = mock_live_instance
+        
+        show_victory_animation()
+        
+        self.assertTrue(mock_live.called)
 
 if __name__ == '__main__':
     unittest.main()

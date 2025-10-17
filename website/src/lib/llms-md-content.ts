@@ -63,8 +63,13 @@ Instead of Python loops, we use a single SQL query to find the first available d
 
 ## 5. Command Reference
 - \`grit config\`: Wizard & headless updates.
-- \`grit commit <args>\`: Transparent passthrough.
-- \`grit status\`: Progress dashboard + future forecast.
+- \`grit commit <args>\`: Transparent passthrough with optional AI message generation.
+- \`grit status\`: Progress dashboard + future forecast. Use \`-y\` to skip repository state.
 - \`grit sync\`: Multi-source state alignment.
+- \`grit move\`: Interactive history re-allocator. Use \`-p\` to push after rewrite.
+- \`grit spread\`: Batch history redistribution. Use \`-p\` to push after rewrite.
+- \`grit log\`: Enhanced, human-readable repository history.
+- \`grit undo\`: Quantum rollback of the last commit and state count.
 - \`grit ungrit\`: Secure teardown.
+- \`grit --version\`: Eager version check.
 `;
