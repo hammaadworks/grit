@@ -1,16 +1,13 @@
 import subprocess
+
 import typer
-from rich.table import Table
-from rich.live import Live
-from rich.text import Text
-from rich.padding import Padding
-from grit.ui import (
-    console, err_console, BRAND_COLOR, SUCCESS_COLOR, WARN_COLOR, ERROR_COLOR, ACCENT_COLOR,
-    get_key, get_banner_layout
-)
-from grit.state import StateManager
+
 from grit.allocator import DateAllocator
-from grit.executor import execute_grit_spread, is_commit_pushed
+from grit.executor import execute_grit_spread
+from grit.state import StateManager
+from grit.ui import (ACCENT_COLOR, BRAND_COLOR, console, err_console, ERROR_COLOR,
+                     run_selection_menu, SUCCESS_COLOR, WARN_COLOR)
+
 
 def get_commit_original_date(commit_hash: str) -> str:
     """Returns the YYYY-MM-DD author date of a specific commit."""
