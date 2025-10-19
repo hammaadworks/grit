@@ -281,7 +281,8 @@ def run_commit(state: StateManager, ctx: typer.Context):
         final_msg = ""
         
         while True:
-            choice, idx = run_selection_menu("Select commit type:", options, selected_idx=idx)
+            choice, idx = run_selection_menu("Select commit type:", options,
+                                             selected_idx=idx, show_banner=False)
             
             if choice is None: # User pressed Q
                 console.print("[dim]Aborted.[/dim]")
@@ -298,8 +299,7 @@ def run_commit(state: StateManager, ctx: typer.Context):
                     msg = generate_commit_message(diff, ai_url, ai_key, ai_model)
                 if msg:
                     # Refine with high-fidelity text input
-                    final_msg = run_text_input("Refine AI Message", initial_text=msg)
-                    if not final_msg: final_msg = msg
+                    final_msg = msg
                     break
                 else:
                     err_console.print(f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]")
@@ -328,8 +328,12 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 type_prefix = choice # Define type_prefix
                 
                 # Prompt for Scope (Optional)
-                scope_instruction = "Enter commit scope (optional, press Enter to skip):"
-                scope_value = run_text_input(scope_instruction, initial_text="")
+                scope_instruction = Text("Enter commit scope (optional, press Enter to skip):", style="bold cyan")
+                scope_value = typer.prompt(scope_instruction, default="")
+                
+                # Sanitize scope: replace newlines with spaces and trim
+                if scope_value:
+                    scope_value = scope_value.replace('\n', ' ').strip()
                 
                 # Determine the prefix part of the commit message
                 if scope_value:
@@ -338,8 +342,8 @@ def run_commit(state: StateManager, ctx: typer.Context):
                     prefix_part = type_prefix
 
                 # Prompt for the main commit message body, with the prefix included in the instruction
-                message_instruction = f"Enter your commit message for '{prefix_part}':"
-                message_body = run_text_input(message_instruction, initial_text="")
+                message_instruction = Text(f"Enter your commit message for '{prefix_part}':", style=f"bold {ACCENT_COLOR}")
+                message_body = typer.prompt(message_instruction, default="")
 
                 # If message_body is empty, it means user cancelled or entered empty. Go back to type selection.
                 if not message_body:
@@ -402,7 +406,7 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 subprocess.run(["git", "push"])
                 
             # Chain grit status at the end
-            run_status(state)
+            run_status(state=state, yes=True)
         else:
             # If execute_git_commit returns False, it means the commit failed or was cancelled
             pass
