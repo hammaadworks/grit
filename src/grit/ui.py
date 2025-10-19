@@ -93,29 +93,39 @@ def run_text_input(title: str, initial_text: str = "", help_text: str = "") -> s
     Renders an interactive TUI text box for multi-line free-text input.
     """
     text = initial_text
-    
-    with Live(auto_refresh=False, console=console, screen=True) as live:
+    is_expanded = False # Start collapsed
+    min_lines = 3 # Minimum lines for collapsed view
+    min_lines = 1 # Minimum lines for collapsed view
+
+    with Live(auto_refresh=False, console=console, screen=False) as live:
         while True:
             # Compose final view
             grid = Table.grid(expand=True)
             grid.add_row(get_banner_layout())
-            
+
             # Input area
             input_grid = Table.grid(expand=True)
             input_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
+
+            # Calculate height for dynamic expansion
+            current_lines = text.count('\n') + 1
+            target_height = max(min_lines, current_lines)
+            target_height = max(min_lines, current_lines + 2)
             
             # Text area with cursor emulation
             display_text = Text(text)
-            display_text.append("█", style=f"bold {BRAND_COLOR}") # Cursor
+            display_text.append("_", style="bold white") # Cursor
             
             input_grid.add_row(Padding(
-                Panel(display_text, border_style=BRAND_COLOR, padding=(1, 2), height=10),
+                Panel(display_text, border_style=BRAND_COLOR, padding=(1, 2), height=target_height),
                 (1, 0)
             ))
             
             # Footer / Help
             if not help_text:
                 help_text = "[Enter] Newline  [Ctrl+D] Save  [Ctrl+C] Abort"
+            # If help_text was provided externally, we assume it's complete.
+            # The Ctrl+E part is removed as the toggle is no longer relevant.
             input_grid.add_row(Text(f" {help_text}", style="dim"))
             
             grid.add_row(Padding(input_grid, (0, 4)))
@@ -125,12 +135,14 @@ def run_text_input(title: str, initial_text: str = "", help_text: str = "") -> s
             
             if key == '\x04': # Ctrl+D (EOF / Save)
                 break
+            elif key == '\x03': # Ctrl+C
+                raise KeyboardInterrupt
+            elif key == '\x05': # Ctrl+E (Toggle expansion)
+                is_expanded = not is_expanded
             elif key in ('\r', '\n'):
                 text += "\n"
             elif key == '\x7f' or key == '\x08': # Backspace
                 text = text[:-1]
-            elif key == '\x03': # Ctrl+C
-                raise KeyboardInterrupt
             elif len(key) == 1:
                 text += key
                 
@@ -142,7 +154,7 @@ def run_selection_menu(title: str, options: list[str], selected_idx: int = 0) ->
     Returns (selected_option, index) or (None, -1) if aborted.
     """
     idx = selected_idx
-    with Live(auto_refresh=False, console=console, screen=True) as live:
+    with Live(auto_refresh=False, console=console, screen=False) as live:
         while True:
             grid = Table.grid(expand=True)
             grid.add_row(get_banner_layout())

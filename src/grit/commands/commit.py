@@ -1,28 +1,26 @@
-import sys
 import subprocess
+
 import typer
-from typing import Annotated, Optional
-from rich.table import Table
 from rich.live import Live
-from rich.text import Text
 from rich.padding import Padding
 from rich.prompt import Confirm
-from grit.ui import (
-    console, err_console, BRAND_COLOR, SUCCESS_COLOR, WARN_COLOR, ERROR_COLOR, ACCENT_COLOR,
-    get_key, get_banner_layout, run_text_input
-)
-from grit.state import StateManager
+from rich.table import Table
+from rich.text import Text
+
+from grit.ai import generate_commit_message
 from grit.allocator import DateAllocator
+from grit.commands.status import run_status
 from grit.executor import (
-    execute_git_commit, 
-    get_unstaged_files, 
-    get_staged_diff, 
-    has_staged_files, 
+    execute_git_commit,
+    get_staged_diff,
     get_staged_files,
     get_status_files
 )
-from grit.ai import generate_commit_message
-from grit.commands.status import run_status
+from grit.state import StateManager
+from grit.ui import (ACCENT_COLOR, BRAND_COLOR, console, err_console, ERROR_COLOR,
+                     get_banner_layout, get_key, print_banner, run_selection_menu,
+                     run_text_input, SUCCESS_COLOR, WARN_COLOR)
+
 
 def run_commit(state: StateManager, ctx: typer.Context):
     """
@@ -108,7 +106,7 @@ def run_commit(state: StateManager, ctx: typer.Context):
         visible_count = 12
         scroll_offset = 0
         
-        with Live(auto_refresh=False, console=console, screen=True) as live:
+        with Live(auto_refresh=False, console=console, screen=False) as live:
             while True:
                 # Calculate visible items based on collapsed state (prefix-based inheritance)
                 visible_items = []
@@ -308,16 +306,55 @@ def run_commit(state: StateManager, ctx: typer.Context):
                     idx = options.index("feat") # Default fallback index
                     continue
             
-            # Manual Message Entry using high-fidelity TUI
-            type_prefix = choice
-            instruction = f"Enter message for {type_prefix} commit:"
-            msg_template = f"{type_prefix}: "
+            # Define instruction for manual input
+            instruction = "Enter your commit message (e.g., feat(scope): message)"
             
-            final_msg = run_text_input(instruction, initial_text=msg_template)
-            if not final_msg or final_msg == msg_template:
-                # Cancel if empty or just prefix
+            if choice == "✨ Auto-generate (AI)":
+                diff = get_staged_diff()
+                with console.status(f"[bold {BRAND_COLOR}]AI analyzing diff...[/bold {BRAND_COLOR}]", spinner="dots12"):
+                    msg = generate_commit_message(diff, ai_url, ai_key, ai_model)
+                if msg:
+                    # Refine with high-fidelity text input
+                    final_msg = run_text_input(instruction, initial_text=msg)
+                    if not final_msg: final_msg = msg
+                    break
+                else:
+                    err_console.print(f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]")
+                    # Fallback to manual input by re-selecting commit type
+                    continue
+            
+            # Handle manual commit type selection
+            if choice in commit_types: # Check if the selected choice is a standard commit type
+                type_prefix = choice # Define type_prefix
+                
+                # Prompt for Scope (Optional)
+                scope_instruction = "Enter commit scope (optional, press Enter to skip):"
+                scope_value = run_text_input(scope_instruction, initial_text="")
+                
+                # Determine the prefix part of the commit message
+                if scope_value:
+                    prefix_part = f"{type_prefix}({scope_value})"
+                else:
+                    prefix_part = type_prefix
+
+                # Prompt for the main commit message body, with the prefix included in the instruction
+                message_instruction = f"Enter your commit message for '{prefix_part}':"
+                message_body = run_text_input(message_instruction, initial_text="")
+
+                # If message_body is empty, it means user cancelled or entered empty. Go back to type selection.
+                if not message_body:
+                    continue
+
+                # Construct the final commit message
+                final_msg = f"{prefix_part}: {message_body}"
+
+                break # Exit the loop as we have a valid final_msg.
+
+            else: # This else block should remain as it handles unexpected choices
+                # This case should not be reached given the options provided in run_selection_menu.
+                # If it is, it indicates an unexpected choice. Let's restart the selection.
+                console.print(f"[{ERROR_COLOR}]Unexpected choice: {choice}. Please try again.[/]")
                 continue
-            break
 
         # Step C: Date Allocation & Final Execution
         allocator = DateAllocator(state)
@@ -337,7 +374,6 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 subprocess.run(["git", "push"])
             
             # Chain grit status at the end
-            print_banner()
             run_status(state)
         else:
             console.print(f"[{WARN_COLOR}]⚠ Commit cancelled or failed.[/{WARN_COLOR}]")
