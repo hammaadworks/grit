@@ -378,7 +378,7 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 subprocess.run(["git", "push"])
             
             # Chain grit status at the end
-            run_status(state)
+            run_status(state=state, yes=True)
         else:
             console.print(f"[{WARN_COLOR}]⚠ Commit cancelled or failed.[/{WARN_COLOR}]")
 
