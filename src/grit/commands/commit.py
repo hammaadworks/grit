@@ -459,9 +459,9 @@ def _prompt_commit_subject(prefix_part):
 
 
 def _prompt_commit_body():
-    console.print("\n[bold bright_cyan]    Enter commit body (optional): "
+    console.print("\n[bold bright_cyan]Enter commit body (optional): "
                   "[/bold bright_cyan]")
-    console.print("[dim]    Press Enter twice to finish • Ctrl+C to abort[/dim]")
+    console.print("[dim]Press Enter twice to finish • Ctrl+C to abort[/dim]\n")
     return _read_multiline_input()
 
 
