@@ -17,9 +17,21 @@ from grit.executor import (
     get_status_files
 )
 from grit.state import StateManager
-from grit.ui import (ACCENT_COLOR, BRAND_COLOR, console, err_console, ERROR_COLOR,
-                     get_banner_layout, get_key, print_banner, run_selection_menu,
-                     run_text_input, SUCCESS_COLOR, WARN_COLOR)
+from grit.ui import (
+    ACCENT_COLOR,
+    BRAND_COLOR,
+    console,
+    err_console,
+    ERROR_COLOR,
+    get_banner_layout,
+    get_key,
+    run_selection_menu,
+    SUCCESS_COLOR,
+    WARN_COLOR,
+)
+
+
+COMMIT_TYPES = ["feat", "fix", "docs", "style", "refactor", "test", "chore"]
 
 
 def run_commit(state: StateManager, ctx: typer.Context):
@@ -28,385 +40,523 @@ def run_commit(state: StateManager, ctx: typer.Context):
     Run without arguments to enter the Interactive AI DevX Wizard.
     """
     args = ctx.args
-    
-    # INTERACTIVE DEVX WIZARD (Zero arguments)
-    if not args:
-        # Step A: File Picker (Interactive `git add`)
-        status_files = get_status_files()
-        files = [f for f, s in status_files]
-        status_map = {f: s for f, s in status_files}
-        staged_files = get_staged_files()
-        
-        if not files:
-            console.print(f"[{WARN_COLOR}]No changes to commit.[/{WARN_COLOR}]")
-            raise typer.Exit(0)
-            
-        # 1. Build nested dict tree
-        root_tree = {}
-        for f in sorted(files):
-            parts = f.split('/')
-            curr = root_tree
-            for i, part in enumerate(parts):
-                if i == len(parts) - 1: # File
-                    curr[part] = f
-                else: # Dir
-                    if part not in curr:
-                        curr[part] = {}
-                    curr = curr[part]
-        
-        # 2. Flatten into items list with hierarchical data
-        items = [{"type": "all", "label": "(Select All)", "files": files, "depth": 0}]
-        
-        def flatten_tree(curr_dict, depth, parent_path=""):
-            res = []
-            # Sort so dirs come before files, then alphabetically
-            sorted_names = sorted(curr_dict.keys(), key=lambda n: (not isinstance(curr_dict[n], dict), n))
-            
-            for name in sorted_names:
-                val = curr_dict[name]
-                # Ensure parent_path ends with / for startswith matching
-                path = f"{parent_path}{name}/"
-                
-                if isinstance(val, dict):
-                    # Directory: Recursively find all nested files for bulk toggle
-                    def get_all_nested_files(d):
-                        fs = []
-                        for k, v in d.items():
-                            if isinstance(v, dict): fs.extend(get_all_nested_files(v))
-                            else: fs.append(v)
-                        return fs
-                    
-                    dir_files = get_all_nested_files(val)
-                    res.append({
-                        "type": "dir", 
-                        "label": f"[bold]{name}/[/bold]", 
-                        "path": path, 
-                        "files": dir_files, 
-                        "depth": depth, 
-                        "collapsed": False,
-                        "parent": parent_path
-                    })
-                    res.extend(flatten_tree(val, depth + 1, path))
-                else:
-                    # File
-                    res.append({
-                        "type": "file", 
-                        "label": name, 
-                        "file": val, 
-                        "depth": depth, 
-                        "parent": parent_path,
-                        "status": status_map.get(val, "modified")
-                    })
-            return res
 
-        items.extend(flatten_tree(root_tree, 1))
-                
-        selected = set(staged_files)
-        idx = 0
-        visible_count = 12
-        scroll_offset = 0
-        
-        with Live(auto_refresh=False, console=console, screen=False) as live:
-            while True:
-                # Calculate visible items based on collapsed state (prefix-based inheritance)
-                visible_items = []
-                collapsed_prefixes = {item["path"] for item in items if item["type"] == "dir" and item.get("collapsed")}
-                
-                for item in items:
-                    if item["type"] == "all":
-                        visible_items.append(item)
-                        continue
-                        
-                    # An item is hidden if any of its parent path prefixes are collapsed
-                    is_hidden = False
-                    item_parent = item.get("parent", "")
-                    for prefix in collapsed_prefixes:
-                        if item_parent.startswith(prefix):
-                            is_hidden = True
-                            break
-                    
-                    if not is_hidden:
-                        visible_items.append(item)
+    if args:
+        _run_passthrough_commit(state, args)
+        return
 
-                # Clamp index to visible bounds
-                if idx >= len(visible_items):
-                    idx = len(visible_items) - 1
-                if idx < 0:
-                    idx = 0
+    selected = _interactive_stage_picker()
+    _sync_staging_area(selected)
 
-                # Sync scroll offset
-                if idx < scroll_offset:
-                    scroll_offset = idx
-                elif idx >= scroll_offset + visible_count:
-                    scroll_offset = idx - visible_count + 1
+    final_msg = _interactive_commit_message_flow(state, ctx)
+    _finalize_commit(state, final_msg)
 
-                # Compose high-fidelity view
-                grid = Table.grid(expand=True)
-                grid.add_row(get_banner_layout())
-                
-                selection_grid = Table.grid(expand=True)
-                selection_grid.add_row(Text("Select files to stage (Space: toggle, Tab/←/→: fold, Enter: confirm, Q: abort):", style=f"bold {ACCENT_COLOR}"))
-                selection_grid.add_row("") # Spacer
-                
-                if scroll_offset > 0:
-                    selection_grid.add_row(Text.from_markup(f"      ↑ [dim](more files above)[/dim]", style=BRAND_COLOR))
 
-                # File selection table
-                table = Table(box=None, padding=(0, 1), show_header=False, expand=False)
-                table.add_column("Cursor", width=2, justify="left")
-                table.add_column("Checkbox", width=3, justify="left")
-                table.add_column("Path", justify="left")
+# =========================
+# INTERACTIVE STAGING FLOW
+# =========================
 
-                for i in range(scroll_offset, min(scroll_offset + visible_count, len(visible_items))):
-                    item = visible_items[i]
-                    is_cur = i == idx
-                    
-                    if item["type"] == "file":
-                        is_sel = item["file"] in selected
-                        is_partial = False
-                        icon = ""
-                    elif item["type"] == "dir":
-                        fs = item["files"]
-                        is_sel = len(fs) > 0 and all(f in selected for f in fs)
-                        is_partial = len(fs) > 0 and any(f in selected for f in fs) and not is_sel
-                        icon = "📁 " if item.get("collapsed") else "📂 "
-                    else: # type == "all"
-                        fs = item["files"]
-                        is_sel = len(fs) > 0 and all(f in selected for f in fs)
-                        is_partial = len(fs) > 0 and any(f in selected for f in fs) and not is_sel
-                        icon = ""
-                        
-                    cursor = "▶" if is_cur else ""
-                    indent = "  " * item["depth"]
-                    
-                    # High-fidelity checkbox icons
-                    if is_sel:
-                        box = f"[{SUCCESS_COLOR}]✔[/]"
-                        style = SUCCESS_COLOR
-                    elif is_partial:
-                        box = f"[{WARN_COLOR}]━[/]"
-                        style = SUCCESS_COLOR # Keep text success colored
-                    else:
-                        box = "[dim]○[/dim]"
-                        style = "dim" if not is_cur else "white"
-                        
-                    label = item['label']
-                    if item["type"] == "dir":
-                        label = f"{icon}{label}"
-                        if item.get("collapsed"):
-                             label += f" [dim]({len(item['files'])} hidden)[/dim]"
-                    elif item["type"] == "file":
-                        status = item.get("status", "modified")
-                        if status == "new":
-                            label = f"[white]{label}[/white]"
-                        elif status == "modified":
-                            label = f"[yellow]{label}[/yellow]"
-                        elif status == "deleted":
-                            label = f"[red]{label}[/red]"
+def _interactive_stage_picker():
+    status_files = get_status_files()
+    files = [f for f, _ in status_files]
+    status_map = {f: s for f, s in status_files}
+    staged_files = get_staged_files()
 
-                    table.add_row(
-                        Text(cursor, style=f"bold {BRAND_COLOR}"),
-                        Text.from_markup(box),
-                        Text.from_markup(f"{indent}{label}", style=style)
-                    )
-                
-                selection_grid.add_row(table)
-                
-                if scroll_offset + visible_count < len(visible_items):
-                     selection_grid.add_row(Text.from_markup(f"      ↓ [dim](more files below)[/dim]", style=BRAND_COLOR))
-                
-                grid.add_row(Padding(selection_grid, (0, 4)))
-                live.update(grid, refresh=True)
-                key = get_key()
-                
-                if key == '\x1b[A': idx = (idx - 1) % len(visible_items)
-                elif key == '\x1b[B': idx = (idx + 1) % len(visible_items)
-                elif key == '\x1b[C': # Right (Expand)
-                    item = visible_items[idx]
-                    if item["type"] == "dir":
-                        item["collapsed"] = False
-                elif key == '\x1b[D': # Left (Collapse)
-                    item = visible_items[idx]
-                    if item["type"] == "dir":
-                        item["collapsed"] = True
-                elif key == '\t': # Tab (Toggle fold)
-                    item = visible_items[idx]
-                    if item["type"] == "dir":
-                        item["collapsed"] = not item.get("collapsed", False)
-                elif key == ' ': 
-                    item = visible_items[idx]
-                    if item["type"] == "file":
-                        f = item["file"]
-                        if f in selected: selected.remove(f)
-                        else: selected.add(f)
-                    else:
-                        fs = item["files"]
-                        if all(f in selected for f in fs):
-                            for f in fs: selected.discard(f)
-                        else:
-                            for f in fs: selected.add(f)
-                elif key.lower() == 'q':
-                    console.print("[dim]Aborted.[/dim]")
-                    raise typer.Exit(0)
-                elif key in ('\r', '\n'): 
-                    break
-        
-        if not selected:
-            console.print("[dim]Aborted. No files selected.[/dim]")
-            raise typer.Exit(0)
-            
-        # Synchronize the staging area with the user's final selection
-        # First, unstage everything that was originally staged but now deselected
-        to_unstage = [f for f in staged_files if f not in selected]
-        if to_unstage:
-            subprocess.run(["git", "reset"] + to_unstage, capture_output=True)
-            
-        # Then, stage everything that is currently selected
-        subprocess.run(["git", "add"] + list(selected))
-        console.print(f"[{SUCCESS_COLOR}]✓ Staging area synchronized ({len(selected)} files selected).[/{SUCCESS_COLOR}]")
-        
-        # Step B: Semantic & AI Wizard
-        ai_key = state.get_config("ai_api_key")
-        ai_url = state.get_config("ai_base_url")
-        ai_model = state.get_config("ai_model")
-        
-        commit_types = ["feat", "fix", "docs", "style", "refactor", "test", "chore"]
-        options = []
-        if ai_key and ai_key != "Not configured" and ai_key != "":
-            options.append("✨ Auto-generate (AI)")
-        options.extend(commit_types)
-        options.append("↩ Go Back")
-        
-        idx = 0
-        final_msg = ""
-        
+    if not files:
+        console.print(f"[{WARN_COLOR}]No changes to commit.[/{WARN_COLOR}]")
+        raise typer.Exit(0)
+
+    root_tree = _build_file_tree(files)
+    items = _build_tree_items(root_tree, files, status_map)
+
+    selected = set(staged_files)
+    idx = 0
+    visible_count = 12
+    scroll_offset = 0
+
+    with Live(auto_refresh=False, console=console, screen=False) as live:
         while True:
-            choice, idx = run_selection_menu("Select commit type:", options,
-                                             selected_idx=idx, show_banner=False)
-            
-            if choice is None: # User pressed Q
+            visible_items = _get_visible_items(items)
+            idx, scroll_offset = _clamp_cursor(idx, scroll_offset, visible_items, visible_count)
+
+            live.update(
+                _render_stage_picker(visible_items, idx, scroll_offset, visible_count, selected),
+                refresh=True
+            )
+
+            key = get_key()
+            action = _handle_stage_picker_key(key, visible_items, idx, selected)
+
+            if action == "abort":
                 console.print("[dim]Aborted.[/dim]")
                 raise typer.Exit(0)
-            
-            if choice == "↩ Go Back":
-                 # Simple way to go back: reset staging area and re-run
-                 subprocess.run(["git", "reset"])
-                 return run_commit(state, ctx)
-            
-            if choice == "✨ Auto-generate (AI)":
-                diff = get_staged_diff()
-                with console.status(f"[bold {BRAND_COLOR}]AI analyzing diff...[/bold {BRAND_COLOR}]", spinner="dots12"):
-                    msg = generate_commit_message(diff, ai_url, ai_key, ai_model)
-                if msg:
-                    # Refine with high-fidelity text input
-                    final_msg = msg
-                    break
-                else:
-                    err_console.print(f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]")
-                    idx = options.index("feat") # Default fallback index
-                    continue
-            
-            # Define instruction for manual input
-            instruction = "Enter your commit message (e.g., feat(scope): message)"
-            
-            if choice == "✨ Auto-generate (AI)":
-                diff = get_staged_diff()
-                with console.status(f"[bold {BRAND_COLOR}]AI analyzing diff...[/bold {BRAND_COLOR}]", spinner="dots12"):
-                    msg = generate_commit_message(diff, ai_url, ai_key, ai_model)
-                if msg:
-                    # Refine with high-fidelity text input
-                    final_msg = run_text_input(instruction, initial_text=msg)
-                    if not final_msg: final_msg = msg
-                    break
-                else:
-                    err_console.print(f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]")
-                    # Fallback to manual input by re-selecting commit type
-                    continue
-            
-            # Handle manual commit type selection
-            if choice in commit_types: # Check if the selected choice is a standard commit type
-                type_prefix = choice # Define type_prefix
-                
-                # Prompt for Scope (Optional)
-                scope_instruction = Text("Enter commit scope (optional, press Enter to skip):", style="bold cyan")
-                scope_value = typer.prompt(scope_instruction, default="")
-                
-                # Sanitize scope: replace newlines with spaces and trim
-                if scope_value:
-                    scope_value = scope_value.replace('\n', ' ').strip()
-                
-                # Determine the prefix part of the commit message
-                if scope_value:
-                    prefix_part = f"{type_prefix}({scope_value})"
-                else:
-                    prefix_part = type_prefix
+            elif action == "confirm":
+                break
+            elif action == "up":
+                idx = (idx - 1) % len(visible_items)
+            elif action == "down":
+                idx = (idx + 1) % len(visible_items)
 
-                # Prompt for the main commit message body, with the prefix included in the instruction
-                message_instruction = Text(f"Enter your commit message for '{prefix_part}':", style=f"bold {ACCENT_COLOR}")
-                message_body = typer.prompt(message_instruction, default="")
+    if not selected:
+        console.print("[dim]Aborted. No files selected.[/dim]")
+        raise typer.Exit(0)
 
-                # If message_body is empty, it means user cancelled or entered empty. Go back to type selection.
-                if not message_body:
-                    continue
+    return selected
 
-                # Construct the final commit message
-                final_msg = f"{prefix_part}: {message_body}"
 
-                break # Exit the loop as we have a valid final_msg.
-
-            else: # This else block should remain as it handles unexpected choices
-                # This case should not be reached given the options provided in run_selection_menu.
-                # If it is, it indicates an unexpected choice. Let's restart the selection.
-                console.print(f"[{ERROR_COLOR}]Unexpected choice: {choice}. Please try again.[/]")
-                continue
-
-        # Step C: Date Allocation & Final Execution
-        allocator = DateAllocator(state)
-        target_date = allocator.get_next_date()
-        
-        console.print(f"\n[dim]Allocating commit to: [bold white]{target_date}[/bold white][/dim]")
-        
-        # We pass -m as a list item to ensure Typer/Git handles spaces correctly.
-        if execute_git_commit(["-m", final_msg], target_date, state):
-            console.print(f"[{SUCCESS_COLOR}]✓ Commit successfully distributed.[/{SUCCESS_COLOR}]")
-            
-            # Post-commit actions: Push and Status Chaining
-            console.print()
-            push_prompt = Confirm.ask(f"[{ACCENT_COLOR}]Would you like to push these changes now?[/]", default=True, console=console)
-            if push_prompt:
-                console.print(f"[{BRAND_COLOR}]Pushing to remote...[/{BRAND_COLOR}]")
-                subprocess.run(["git", "push"])
-            
-            # Chain grit status at the end
-            run_status(state=state, yes=True)
-        else:
-            console.print(f"[{WARN_COLOR}]⚠ Commit cancelled or failed.[/{WARN_COLOR}]")
-
-    else:
-        # Pass-through Mode: Just allocate the date and run git commit
-        allocator = DateAllocator(state)
-        target_date = allocator.get_next_date()
-        
-        # Check if we should warn about --amend
-        is_amend = "--amend" in args
-        if is_amend:
-            console.print(f"[{WARN_COLOR}]⚠ Amend detected. Grit will not increment daily target for amends.[/{WARN_COLOR}]")
-            
-        if execute_git_commit(list(args), target_date, state):
-            if not is_amend:
-                console.print(f"[{SUCCESS_COLOR}]✓ Commit distributed to {target_date}.[/{SUCCESS_COLOR}]")
+def _build_file_tree(files):
+    root_tree = {}
+    for f in sorted(files):
+        parts = f.split("/")
+        curr = root_tree
+        for i, part in enumerate(parts):
+            if i == len(parts) - 1:
+                curr[part] = f
             else:
-                console.print(f"[{SUCCESS_COLOR}]✓ Commit amended.[/{SUCCESS_COLOR}]")
-            
-            # Post-commit actions: Push and Status Chaining
-            console.print()
-            push_prompt = Confirm.ask(f"[{ACCENT_COLOR}]Would you like to push these changes now?[/]", default=True, console=console)
-            if push_prompt:
-                console.print(f"[{BRAND_COLOR}]Pushing to remote...[/{BRAND_COLOR}]")
-                subprocess.run(["git", "push"])
-                
-            # Chain grit status at the end
-            run_status(state=state, yes=True)
+                curr = curr.setdefault(part, {})
+    return root_tree
+
+
+def _build_tree_items(root_tree, files, status_map):
+    items = [{"type": "all", "label": "(Select All)", "files": files, "depth": 0}]
+    items.extend(_flatten_tree(root_tree, status_map, depth=1))
+    return items
+
+
+def _flatten_tree(curr_dict, status_map, depth, parent_path=""):
+    res = []
+    sorted_names = sorted(curr_dict.keys(), key=lambda n: (not isinstance(curr_dict[n], dict), n))
+
+    for name in sorted_names:
+        val = curr_dict[name]
+        path = f"{parent_path}{name}/"
+
+        if isinstance(val, dict):
+            dir_files = _get_all_nested_files(val)
+            res.append({
+                "type": "dir",
+                "label": f"[bold]{name}/[/bold]",
+                "path": path,
+                "files": dir_files,
+                "depth": depth,
+                "collapsed": False,
+                "parent": parent_path,
+            })
+            res.extend(_flatten_tree(val, status_map, depth + 1, path))
         else:
-            # If execute_git_commit returns False, it means the commit failed or was cancelled
-            pass
+            res.append({
+                "type": "file",
+                "label": name,
+                "file": val,
+                "depth": depth,
+                "parent": parent_path,
+                "status": status_map.get(val, "modified"),
+            })
+
+    return res
+
+
+def _get_all_nested_files(d):
+    fs = []
+    for _, v in d.items():
+        if isinstance(v, dict):
+            fs.extend(_get_all_nested_files(v))
+        else:
+            fs.append(v)
+    return fs
+
+
+def _get_visible_items(items):
+    visible_items = []
+    collapsed_prefixes = {
+        item["path"]
+        for item in items
+        if item["type"] == "dir" and item.get("collapsed")
+    }
+
+    for item in items:
+        if item["type"] == "all":
+            visible_items.append(item)
+            continue
+
+        item_parent = item.get("parent", "")
+        is_hidden = any(item_parent.startswith(prefix) for prefix in collapsed_prefixes)
+
+        if not is_hidden:
+            visible_items.append(item)
+
+    return visible_items
+
+
+def _clamp_cursor(idx, scroll_offset, visible_items, visible_count):
+    if idx >= len(visible_items):
+        idx = len(visible_items) - 1
+    if idx < 0:
+        idx = 0
+
+    if idx < scroll_offset:
+        scroll_offset = idx
+    elif idx >= scroll_offset + visible_count:
+        scroll_offset = idx - visible_count + 1
+
+    return idx, scroll_offset
+
+
+def _render_stage_picker(visible_items, idx, scroll_offset, visible_count, selected):
+    grid = Table.grid(expand=True)
+    grid.add_row(get_banner_layout())
+
+    selection_grid = Table.grid(expand=True)
+    selection_grid.add_row(
+        Text(
+            "Select files to stage (Space: toggle, Tab/←/→: fold, Enter: confirm, Q: abort):",
+            style=f"bold {ACCENT_COLOR}",
+        )
+    )
+    selection_grid.add_row("")
+
+    if scroll_offset > 0:
+        selection_grid.add_row(
+            Text.from_markup("      ↑ [dim](more files above)[/dim]", style=BRAND_COLOR)
+        )
+
+    table = Table(box=None, padding=(0, 1), show_header=False, expand=False)
+    table.add_column("Cursor", width=2, justify="left")
+    table.add_column("Checkbox", width=3, justify="left")
+    table.add_column("Path", justify="left")
+
+    upper = min(scroll_offset + visible_count, len(visible_items))
+    for i in range(scroll_offset, upper):
+        item = visible_items[i]
+        is_cur = i == idx
+        row = _build_stage_row(item, is_cur, selected)
+        table.add_row(*row)
+
+    selection_grid.add_row(table)
+
+    if scroll_offset + visible_count < len(visible_items):
+        selection_grid.add_row(
+            Text.from_markup("      ↓ [dim](more files below)[/dim]", style=BRAND_COLOR)
+        )
+
+    grid.add_row(Padding(selection_grid, (0, 4)))
+    return grid
+
+
+def _build_stage_row(item, is_cur, selected):
+    is_sel, is_partial, icon = _selection_state(item, selected)
+    cursor = "▶" if is_cur else ""
+    indent = "  " * item["depth"]
+
+    if is_sel:
+        box = f"[{SUCCESS_COLOR}]✔[/]"
+        style = SUCCESS_COLOR
+    elif is_partial:
+        box = f"[{WARN_COLOR}]━[/]"
+        style = SUCCESS_COLOR
+    else:
+        box = "[dim]○[/dim]"
+        style = "dim" if not is_cur else "white"
+
+    label = _format_item_label(item, icon)
+
+    return (
+        Text(cursor, style=f"bold {BRAND_COLOR}"),
+        Text.from_markup(box),
+        Text.from_markup(f"{indent}{label}", style=style),
+    )
+
+
+def _selection_state(item, selected):
+    if item["type"] == "file":
+        is_sel = item["file"] in selected
+        return is_sel, False, ""
+
+    fs = item["files"]
+    is_sel = len(fs) > 0 and all(f in selected for f in fs)
+    is_partial = len(fs) > 0 and any(f in selected for f in fs) and not is_sel
+    icon = "📁 " if item["type"] == "dir" and item.get("collapsed") else "📂 " if item["type"] == "dir" else ""
+    return is_sel, is_partial, icon
+
+
+def _format_item_label(item, icon):
+    label = item["label"]
+
+    if item["type"] == "dir":
+        label = f"{icon}{label}"
+        if item.get("collapsed"):
+            label += f" [dim]({len(item['files'])} hidden)[/dim]"
+
+    elif item["type"] == "file":
+        status = item.get("status", "modified")
+        if status == "new":
+            label = f"[white]{label}[/white]"
+        elif status == "modified":
+            label = f"[yellow]{label}[/yellow]"
+        elif status == "deleted":
+            label = f"[red]{label}[/red]"
+
+    return label
+
+
+def _handle_stage_picker_key(key, visible_items, idx, selected):
+    item = visible_items[idx]
+
+    if key == "\x1b[A":
+        return "up"
+    if key == "\x1b[B":
+        return "down"
+    if key == "\x1b[C" and item["type"] == "dir":
+        item["collapsed"] = False
+        return None
+    if key == "\x1b[D" and item["type"] == "dir":
+        item["collapsed"] = True
+        return None
+    if key == "\t" and item["type"] == "dir":
+        item["collapsed"] = not item.get("collapsed", False)
+        return None
+    if key == " ":
+        _toggle_selection(item, selected)
+        return None
+    if key.lower() == "q":
+        return "abort"
+    if key in ("\r", "\n"):
+        return "confirm"
+
+    return None
+
+
+def _toggle_selection(item, selected):
+    if item["type"] == "file":
+        f = item["file"]
+        if f in selected:
+            selected.remove(f)
+        else:
+            selected.add(f)
+        return
+
+    fs = item["files"]
+    if all(f in selected for f in fs):
+        for f in fs:
+            selected.discard(f)
+    else:
+        for f in fs:
+            selected.add(f)
+
+
+def _sync_staging_area(selected):
+    staged_files = get_staged_files()
+    to_unstage = [f for f in staged_files if f not in selected]
+
+    if to_unstage:
+        subprocess.run(["git", "reset"] + to_unstage, capture_output=True)
+
+    subprocess.run(["git", "add"] + list(selected))
+    console.print(
+        f"[{SUCCESS_COLOR}]✓ Staging area synchronized ({len(selected)} files selected).[/{SUCCESS_COLOR}]"
+    )
+
+
+# =========================
+# COMMIT MESSAGE FLOW
+# =========================
+
+def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context):
+    ai_key = state.get_config("ai_api_key")
+    ai_url = state.get_config("ai_base_url")
+    ai_model = state.get_config("ai_model")
+
+    options = _build_commit_options(ai_key)
+    idx = 0
+
+    while True:
+        choice, idx = run_selection_menu(
+            "Select commit type:",
+            options,
+            selected_idx=idx,
+            show_banner=False,
+        )
+
+        if choice is None:
+            console.print("[dim]Aborted.[/dim]")
+            raise typer.Exit(0)
+
+        if choice == "↩ Go Back":
+            subprocess.run(["git", "reset"])
+            return run_commit(state, ctx)
+
+        if choice == "✨ Auto-generate (AI)":
+            msg = _generate_ai_commit_message(ai_url, ai_key, ai_model)
+            if msg:
+                return _edit_multiline_commit_message(msg)
+            idx = options.index("feat")
+            continue
+
+        if choice in COMMIT_TYPES:
+            return _manual_commit_message(choice)
+
+        console.print(f"[{ERROR_COLOR}]Unexpected choice: {choice}. Please try again.[/]")
+
+
+def _build_commit_options(ai_key):
+    options = []
+    if ai_key and ai_key != "Not configured" and ai_key != "":
+        options.append("✨ Auto-generate (AI)")
+    options.extend(COMMIT_TYPES)
+    options.append("↩ Go Back")
+    return options
+
+
+def _generate_ai_commit_message(ai_url, ai_key, ai_model):
+    diff = get_staged_diff()
+    with console.status(
+        f"[bold {BRAND_COLOR}]AI analyzing diff...[/bold {BRAND_COLOR}]",
+        spinner="dots12",
+    ):
+        msg = generate_commit_message(diff, ai_url, ai_key, ai_model)
+
+    if msg:
+        return msg
+
+    err_console.print(
+        f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]"
+    )
+    return None
+
+
+def _manual_commit_message(type_prefix):
+    scope_value = _prompt_commit_scope()
+
+    if scope_value:
+        prefix_part = f"{type_prefix}({scope_value})"
+    else:
+        prefix_part = type_prefix
+
+    body = _prompt_multiline_commit_message(prefix_part)
+    if not body.strip():
+        console.print("[dim]Aborted.[/dim]")
+        raise typer.Exit(0)
+
+    return f"{prefix_part}: {body}"
+
+
+def _prompt_commit_scope():
+    console.print("[bold bright_cyan]Enter commit scope..[/bold bright_cyan]\n\n")
+    scope_value = typer.prompt("", default="")
+    return scope_value.replace("\n", " ").strip() if scope_value else ""
+
+
+def _prompt_multiline_commit_message(prefix_part):
+    console.print("[bold bright_cyan]Enter commit message..[/bold bright_cyan]\n\n")
+    console.print(f"[dim]Prefix: {prefix_part}[/dim]")
+    console.print("[dim]Press Enter twice to finish • Ctrl+C to abort[/dim]\n")
+
+    lines = []
+    empty_streak = 0
+
+    while True:
+        try:
+            line = input()
+
+            if line == "":
+                empty_streak += 1
+                if empty_streak >= 2:
+                    break
+            else:
+                empty_streak = 0
+
+            lines.append(line)
+
+        except KeyboardInterrupt:
+            console.print("\n[dim]Aborted.[/dim]")
+            raise typer.Exit(0)
+
+    while lines and lines[-1] == "":
+        lines.pop()
+
+    return "\n".join(lines)
+
+
+def _edit_multiline_commit_message(initial_text):
+    console.print("[bold bright_cyan]Enter commit message..[/bold bright_cyan]\n\n")
+    console.print("[dim]Edit below (Press Enter twice to finish • Ctrl+C to abort)[/dim]\n")
+    console.print("[dim]--- AI Suggestion ---[/dim]")
+    console.print(initial_text)
+    console.print("[dim]---------------------[/dim]\n")
+
+    lines = []
+    empty_streak = 0
+
+    while True:
+        try:
+            line = input()
+
+            if line == "":
+                empty_streak += 1
+                if empty_streak >= 2:
+                    break
+            else:
+                empty_streak = 0
+
+            lines.append(line)
+
+        except KeyboardInterrupt:
+            console.print("\n[dim]Aborted.[/dim]")
+            raise typer.Exit(0)
+
+    while lines and lines[-1] == "":
+        lines.pop()
+
+    result = "\n".join(lines).strip()
+    return result if result else initial_text
+
+
+# =========================
+# FINAL COMMIT EXECUTION
+# =========================
+
+def _finalize_commit(state: StateManager, final_msg):
+    allocator = DateAllocator(state)
+    target_date = allocator.get_next_date()
+
+    console.print(f"\n[dim]Allocating commit to: [bold white]{target_date}[/bold white][/dim]")
+
+    if execute_git_commit(["-m", final_msg], target_date, state):
+        console.print(f"[{SUCCESS_COLOR}]✓ Commit successfully distributed.[/{SUCCESS_COLOR}]")
+        _post_commit_actions(state)
+    else:
+        console.print(f"[{WARN_COLOR}]⚠ Commit cancelled or failed.[/{WARN_COLOR}]")
+
+
+def _run_passthrough_commit(state: StateManager, args):
+    allocator = DateAllocator(state)
+    target_date = allocator.get_next_date()
+
+    is_amend = "--amend" in args
+    if is_amend:
+        console.print(
+            f"[{WARN_COLOR}]⚠ Amend detected. Grit will not increment daily target for amends.[/{WARN_COLOR}]"
+        )
+
+    if execute_git_commit(list(args), target_date, state):
+        if not is_amend:
+            console.print(f"[{SUCCESS_COLOR}]✓ Commit distributed to {target_date}.[/{SUCCESS_COLOR}]")
+        else:
+            console.print(f"[{SUCCESS_COLOR}]✓ Commit amended.[/{SUCCESS_COLOR}]")
+
+        _post_commit_actions(state)
+
+
+def _post_commit_actions(state: StateManager):
+    console.print()
+    push_prompt = Confirm.ask(
+        f"[{ACCENT_COLOR}]Would you like to push these changes now?[/]",
+        default=True,
+        console=console,
+    )
+
+    if push_prompt:
+        console.print(f"[{BRAND_COLOR}]Pushing to remote...[/{BRAND_COLOR}]")
+        subprocess.run(["git", "push"])
+
+    run_status(state=state, yes=True)
