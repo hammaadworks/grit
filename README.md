@@ -46,6 +46,13 @@ Alternatively, you can download the latest source code or wheels from [GitHub Re
    grit status
    ```
 
+4. **Launch the Dashboard:**
+   Open the high-fidelity visualization GUI. It launches in the background by default!
+   ```bash
+   grit dash
+   # Or run in foreground: grit dash --logs
+   ```
+
 ## ⚠️ Important Disclaimers
 
 * **Collaboration:** Use Grit primarily in **personal or solo projects**. Modifying author dates in heavily collaborative repositories can cause timeline confusion for other developers.
