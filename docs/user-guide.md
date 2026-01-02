@@ -29,13 +29,15 @@ You will be prompted for four simple things:
 
 ---
 
-## 2. Intelligence Dashboard (`grit dashboard`)
+## 2. Intelligence Dashboard (`grit dash`)
 
 Grit includes a built-in, high-fidelity web dashboard that works completely offline. It provides deep insights into your commit velocity and pipeline.
 
 ```bash
-$ grit dashboard
+$ grit dash
 ```
+
+*Note: The dashboard runs in the background by default so you can keep using your terminal. Use `grit dash --logs` to run it in the foreground.*
 
 - **Visual Velocity:** Interactive charts showing your last 30 days of work.
 - **Journey Progress:** Track exactly how many commits are pending to reach your "Green Wall" goal.
@@ -76,7 +78,22 @@ Use it exactly like standard Git to bypass the wizard:
 
 ---
 
-## 4. History Redistributor (`grit spread`)
+## 4. Visualizing History (`grit log`)
+
+Grit comes with a beautifully enhanced, human-readable git log on jetpack rollerskates. It addresses all the community issues of standard `git log` by providing a clear, colorful, and branched view of your repository history right in your terminal.
+
+```bash
+$ grit log
+```
+
+- **Visual Branches:** See exactly how your feature branches diverge and merge with color-coded graph lines.
+- **Human-Readable Times:** Commit dates are displayed in an easy-to-read format (e.g., "2 hours ago", "3 days ago").
+- **Clear Hashes & Tags:** Commit hashes, branches, and tags are brightly color-coded for quick scanning.
+- **Pass-through:** Just like `grit commit`, you can pass standard git log arguments (e.g., `grit log -n 10` or `grit log --author="Name"`).
+
+---
+
+## 5. History Redistributor (`grit spread`)
 
 Finished a massive feature and made 10 commits in one night? Use `grit spread` to intelligently redistribute them across your historical gaps.
 
@@ -94,7 +111,7 @@ $ grit spread HEAD~5
 
 ---
 
-## 5. Quantum Undo (`grit undo`)
+## 6. Quantum Undo (`grit undo`)
 
 Made a mistake? Committed to the wrong day? Use the panic button:
 
@@ -109,7 +126,7 @@ This command safely performs a `git reset --soft HEAD~1` (keeping your files sta
 
 ---
 
-## 6. Checking Status
+## 7. Checking Status
 
 Want to know how many commits you have left for the day, or view your overall journey progress?
 

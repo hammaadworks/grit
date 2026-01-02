@@ -46,7 +46,13 @@ Alternatively, you can download the latest source code or wheels from [GitHub Re
    grit status
    ```
 
-4. **Launch the Dashboard:**
+4. **Visualize History:**
+   See a beautiful, branching, and colorful view of your repository history.
+   ```bash
+   grit log
+   ```
+
+5. **Launch the Dashboard:**
    Open the high-fidelity visualization GUI. It launches in the background by default!
    ```bash
    grit dash

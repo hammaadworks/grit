@@ -313,11 +313,21 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 type_prefix = choice
                 scope = typer.prompt(f"Scope (optional)", default="", show_default=False)
                 subject = typer.prompt(f"Subject")
-                body = typer.edit() or ""
+                
+                console.print(f"[{ACCENT_COLOR}]Body (optional, press Enter twice to finish):[/{ACCENT_COLOR}]")
+                body_lines = []
+                while True:
+                    line = input("> ")
+                    if not line:
+                        break
+                    body_lines.append(line)
+                body = "\n".join(body_lines)
                 
                 final_msg = f"{type_prefix}"
                 if scope: final_msg += f"({scope})"
-                final_msg += f": {subject}\n\n{body}"
+                final_msg += f": {subject}"
+                if body:
+                    final_msg += f"\n\n{body}"
                 break
 
         # Step C: Date Allocation & Final Execution
@@ -327,8 +337,19 @@ def run_commit(state: StateManager, ctx: typer.Context):
         console.print(f"\n[dim]Allocating commit to: [bold white]{target_date}[/bold white][/dim]")
         
         # We pass -m as a list item to ensure Typer/Git handles spaces correctly.
-        execute_git_commit(["-m", final_msg], target_date, state)
-        console.print(f"[{SUCCESS_COLOR}]✓ Commit successfully distributed.[/{SUCCESS_COLOR}]")
+        if execute_git_commit(["-m", final_msg], target_date, state):
+            console.print(f"[{SUCCESS_COLOR}]✓ Commit successfully distributed.[/{SUCCESS_COLOR}]")
+            
+            # Post-commit actions: Status and Push
+            console.print(f"\n[{BRAND_COLOR}]--- Post-commit Status ---[/{BRAND_COLOR}]")
+            subprocess.run(["git", "status", "--short"])
+            
+            push_prompt = typer.confirm("Would you like to push these changes now?", default=True)
+            if push_prompt:
+                console.print(f"[{BRAND_COLOR}]Pushing to remote...[/{BRAND_COLOR}]")
+                subprocess.run(["git", "push"])
+        else:
+            console.print(f"[{WARN_COLOR}]⚠ Commit cancelled or failed.[/{WARN_COLOR}]")
 
     else:
         # Pass-through Mode: Just allocate the date and run git commit
@@ -345,6 +366,15 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 console.print(f"[{SUCCESS_COLOR}]✓ Commit distributed to {target_date}.[/{SUCCESS_COLOR}]")
             else:
                 console.print(f"[{SUCCESS_COLOR}]✓ Commit amended.[/{SUCCESS_COLOR}]")
+            
+            # Post-commit actions for passthrough too
+            console.print(f"\n[{BRAND_COLOR}]--- Post-commit Status ---[/{BRAND_COLOR}]")
+            subprocess.run(["git", "status", "--short"])
+            
+            push_prompt = typer.confirm("Would you like to push these changes now?", default=True)
+            if push_prompt:
+                console.print(f"[{BRAND_COLOR}]Pushing to remote...[/{BRAND_COLOR}]")
+                subprocess.run(["git", "push"])
         else:
             # If execute_git_commit returns False, it means the commit failed or was cancelled
             pass
