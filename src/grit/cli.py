@@ -20,6 +20,7 @@ from grit.commands.config import run_config_interactive
 from grit.commands.status import run_status
 from grit.commands.sync import run_sync
 from grit.commands.commit import run_commit
+from grit.commands.log import run_log
 
 # Initialize the state globally for the CLI context
 state = StateManager()
