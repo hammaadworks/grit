@@ -87,6 +87,30 @@ The best way to deploy is to automate it via GitHub Actions whenever you push a 
 
 ---
 
+## 6. Website Deployment (GitHub Pages)
+
+Grit's documentation and landing page are built with Next.js and deployed for free using **GitHub Pages**. 
+
+We have configured an automated GitHub Action (`.github/workflows/deploy-docs.yml`) that builds and deploys the static export of the `website/` directory every time you push to the `master` branch.
+
+!!! info "Automatic Deployment"
+    The deployment process is **fully automatic**. Whether you change a core Python file in `src/` or a styling detail in `website/`, a push to `master` triggers the workflow. You don't need to run any manual commands to make your changes live on the web.
+
+### Configuring Your Custom Domain
+If you want to host the website on a custom domain (e.g., `grit.hammaadworks.com`), you need to configure your DNS records:
+
+1. **GitHub Repository Settings**:
+   - Go to your repository **Settings** -> **Pages**.
+   - Under **Custom domain**, enter your domain (e.g., `grit.hammaadworks.com`) and click **Save**. This will automatically update the `CNAME` file in the repository.
+   
+2. **DNS Provider (e.g., Cloudflare, Namecheap, Route53)**:
+   - Create a **CNAME record**.
+   - **Name/Host**: `grit` (or whatever your subdomain is).
+   - **Target/Value**: `hammaadworks.github.io`
+   - *Note: GitHub Pages requires the target to be your GitHub username or organization name followed by `.github.io`.*
+
+---
+
 ## 🚀 Go-Live Checklist
 
 Follow these steps for every major and minor version update to ensure a smooth release.

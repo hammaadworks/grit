@@ -41,29 +41,28 @@ def test_cli_amend_warning(clean_state, mocker):
     result = runner.invoke(app, ["commit", "--amend", "-m", "fix"])
     
     # Check that the specific warning panel was output
-    assert "Warning: Amends are not tracked" in result.stdout
+    assert "Amend detected" in result.stdout
     
     # Check that git commit --amend was still actually executed
-    mock_run.assert_called_once()
-    assert mock_run.call_args.args[0] == ["git", "commit", "--amend", "-m", "fix"]
+    calls = [call.args[0] for call in mock_run.mock_calls if call.args]
+    assert ["git", "commit", "--amend", "-m", "fix"] in calls
 
 def test_interactive_setup_flow(clean_state, mocker):
     """Simulate Typer prompt inputs for config and ensure state is saved."""
     # Mock network call so tests run fast without internet
-    mocker.patch("grit.cli._sync_github")
+    mocker.patch("grit.commands.config.sync_historical_data")
 
     # The new TUI sequence with 'Allocation Strategy' toggle:
     # 0: target. Press Enter. Mock returns "5".
     # 1: start. Press Down, Enter. Mock returns "2024-01-01".
-    # 2: fill. Press Down, Enter. TOGGLES (no prompt).
+    # 2: fill. Press Down, Enter. Mock returns "today".
     # 3: user. Press Down, Enter. Mock returns "testuser".
     # Press 'S' to save and exit.
-    keys = ['\n', '\x1b[B', '\n', '\x1b[B', '\n', '\x1b[B', '\n', 'S']
-    mocker.patch("grit.cli.get_key", side_effect=keys)
+    keys = ['\r', '\x1b[B', '\r', '\x1b[B', '\r', '\x1b[B', '\r', 's']
+    mocker.patch("grit.commands.config.get_key", side_effect=keys)
 
-    # Mock typer.prompt for the 3 edits (target, start, user)
-    # Fill is a toggle, so it doesn't use prompt.
-    mocker.patch("typer.prompt", side_effect=["5", "2024-01-01", "testuser"])
+    # Mock input for the edits
+    mocker.patch("builtins.input", side_effect=["5", "2024-01-01", "today", "testuser"])
 
     result = runner.invoke(app, ["config"])
 
@@ -72,16 +71,11 @@ def test_interactive_setup_flow(clean_state, mocker):
     # Verify DB was updated
     assert clean_state.get_config("daily_target") == "5"
     assert clean_state.get_config("start_date") == "2024-01-01"
-    # Default was start_date (which I set as default), toggle changed it to today
-    # Wait, default in cli.py is now "start_date"
-    # "start_date" toggle -> "today"
     assert clean_state.get_config("fill_strategy") == "today"
     assert clean_state.get_config("github_username") == "testuser"
 
 def test_non_interactive_setup_flow(clean_state, mocker):
     """Simulate headless setup using CLI flags."""
-    mocker.patch("grit.cli._sync_github")
-    
     # Pass all config via flags
     result = runner.invoke(app, ["config", "--target", "10", "--start", "2024-02-02", "--username", "headlessuser"])
     
@@ -102,11 +96,11 @@ def test_wizard_staged_files_interception(clean_state, mocker):
     clean_state.set_config("fill_strategy", "start_date")
 
     # Mock git state: one staged file, one unstaged file
-    mocker.patch("grit.cli.get_unstaged_files", return_value=["staged.txt", "unstaged.txt"])
-    mocker.patch("grit.cli.get_staged_files", return_value=["staged.txt"])
+    mocker.patch("grit.commands.commit.get_unstaged_files", return_value=["staged.txt", "unstaged.txt"])
+    mocker.patch("grit.commands.commit.get_staged_files", return_value=["staged.txt"])
 
     # Just mock get_key to abort immediately with 'q'
-    mocker.patch("grit.cli.get_key", return_value='q')
+    mocker.patch("grit.commands.commit.get_key", return_value='q')
     
     # Run the command
     result = runner.invoke(app, ["commit"])
@@ -124,7 +118,7 @@ def test_cli_ungrit_interactive(clean_state):
     result = runner.invoke(app, ["ungrit"], input="y\n")
     
     assert result.exit_code == 0
-    assert "Grit decommissioned" in result.stdout
+    assert "Grit has been decommissioned" in result.stdout
     assert not clean_state.db_path.parent.exists()
 
 def test_cli_ungrit_force_flag(clean_state):
@@ -136,5 +130,5 @@ def test_cli_ungrit_force_flag(clean_state):
     result = runner.invoke(app, ["ungrit", "--force"])
     
     assert result.exit_code == 0
-    assert "Grit decommissioned" in result.stdout
+    assert "Grit has been decommissioned" in result.stdout
     assert not clean_state.db_path.parent.exists()
