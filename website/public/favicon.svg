@@ -1,0 +1,20 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="100" height="100" rx="20" fill="#14B8A6"/>
+<path d="M30 40L45 30L70 45L55 55L30 40Z" fill="url(#paint0_linear_101_38)"/>
+<path d="M30 40L45 30L45 55L30 70L30 40Z" fill="url(#paint1_linear_101_38)"/>
+<path d="M70 45L55 55L55 70L70 55L70 45Z" fill="url(#paint2_linear_linear_101_38)"/>
+<defs>
+<linearGradient id="paint0_linear_101_38" x1="37.5" y1="35" x2="62.5" y2="50" gradientUnits="userSpaceOnUse">
+<stop stop-color="#E0F2F2"/>
+<stop offset="1" stop-color="#B2DFDB"/>
+</linearGradient>
+<linearGradient id="paint1_linear_101_38" x1="37.5" y1="35" x2="37.5" y2="55" gradientUnits="userSpaceOnUse">
+<stop stop-color="#B2DFDB"/>
+<stop offset="1" stop-color="#80CBC4"/>
+</linearGradient>
+<linearGradient id="paint2_linear_linear_101_38" x1="62.5" y1="50" x2="62.5" y2="70" gradientUnits="userSpaceOnUse">
+<stop stop-color="#80CBC4"/>
+<stop offset="1" stop-color="#4DB6AC"/>
+</linearGradient>
+</defs>
+</svg>

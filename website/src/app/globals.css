@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,48 +6,26 @@
 
 @layer base {
   :root {
-    --background: 174 100% 98%; /* F0FDFA */
-    --foreground: 172 61% 19%; /* 134E4A */
-    --card: 0 0% 100%;
-    --card-foreground: 172 61% 19%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 172 61% 19%;
-    --primary: 175 84% 31%; /* 0D9488 */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 174 81% 40%; /* 14B8A6 */
-    --secondary-foreground: 0 0% 100%;
-    --muted: 174 30% 90%;
-    --muted-foreground: 172 40% 40%;
-    --accent: 25 95% 53%; /* F97316 */
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 174 30% 85%;
-    --input: 174 30% 85%;
-    --ring: 175 84% 31%;
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 172 61% 10%; /* Very dark teal/black */
+    --background: 180 100% 2%; /* Extremely dark teal/black */
     --foreground: 174 100% 98%;
-    --card: 172 61% 13%;
+    --card: 180 100% 4%;
     --card-foreground: 174 100% 98%;
-    --popover: 172 61% 13%;
+    --popover: 180 100% 4%;
     --popover-foreground: 174 100% 98%;
-    --primary: 175 84% 40%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 174 81% 30%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 172 40% 20%;
-    --muted-foreground: 174 30% 70%;
-    --accent: 25 95% 53%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 172 40% 25%;
-    --input: 172 40% 25%;
-    --ring: 175 84% 40%;
+    --primary: 175 84% 45%; /* Vibrant Teal: #14b8a6 */
+    --primary-foreground: 180 100% 2%;
+    --secondary: 175 84% 15%;
+    --secondary-foreground: 174 100% 98%;
+    --muted: 180 100% 8%;
+    --muted-foreground: 174 20% 65%;
+    --accent: 175 84% 45%;
+    --accent-foreground: 180 100% 2%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 180 50% 15%;
+    --input: 180 50% 15%;
+    --ring: 175 84% 45%;
+    --radius: 0.75rem;
   }
 }
 
@@ -57,7 +35,7 @@
   }
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/30;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
   }
   code, pre {
     font-family: 'JetBrains Mono', monospace;
