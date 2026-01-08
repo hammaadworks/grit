@@ -6,7 +6,11 @@ from rich.table import Table
 from rich.live import Live
 from rich.text import Text
 from rich.padding import Padding
-from grit.ui import console, err_console, BRAND_COLOR, SUCCESS_COLOR, WARN_COLOR, ACCENT_COLOR
+from rich.prompt import Confirm
+from grit.ui import (
+    console, err_console, BRAND_COLOR, SUCCESS_COLOR, WARN_COLOR, ERROR_COLOR, ACCENT_COLOR,
+    get_key
+)
 from grit.state import StateManager
 from grit.allocator import DateAllocator
 from grit.executor import (
@@ -18,7 +22,7 @@ from grit.executor import (
     get_status_files
 )
 from grit.ai import generate_commit_message
-from grit.commands.config import get_key
+from grit.commands.status import run_status
 
 def run_commit(state: StateManager, ctx: typer.Context):
     """
@@ -314,18 +318,9 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 scope = typer.prompt(f"Scope (optional)", default="", show_default=False)
                 subject = typer.prompt(f"Subject")
                 
-                console.print(f"\n[{ACCENT_COLOR}]Body (optional):[/{ACCENT_COLOR}]")
-                console.print(f"[dim]Type your message below. Press Enter on an empty line to finish.[/dim]")
-                body_lines = []
-                while True:
-                    try:
-                        line = input(f"[{BRAND_COLOR}]>[/] ")
-                        if not line:
-                            break
-                        body_lines.append(line)
-                    except EOFError:
-                        break
-                body = "\n".join(body_lines)
+                console.print(f"\n[{ACCENT_COLOR}]Body (optional): [dim](Opening editor for multi-line support...)[/dim]")
+                body = typer.edit() or ""
+                body = body.strip()
                 
                 final_msg = f"{type_prefix}"
                 if scope: final_msg += f"({scope})"
@@ -344,14 +339,15 @@ def run_commit(state: StateManager, ctx: typer.Context):
         if execute_git_commit(["-m", final_msg], target_date, state):
             console.print(f"[{SUCCESS_COLOR}]✓ Commit successfully distributed.[/{SUCCESS_COLOR}]")
             
-            # Post-commit actions: Status and Push
-            console.print(f"\n[{BRAND_COLOR}]--- Post-commit Status ---[/{BRAND_COLOR}]")
-            subprocess.run(["git", "status", "--short"])
-            
-            push_prompt = typer.confirm("Would you like to push these changes now?", default=True)
+            # Post-commit actions: Push and Status Chaining
+            console.print()
+            push_prompt = Confirm.ask(f"[{ACCENT_COLOR}]Would you like to push these changes now?[/]", default=True, console=console)
             if push_prompt:
                 console.print(f"[{BRAND_COLOR}]Pushing to remote...[/{BRAND_COLOR}]")
                 subprocess.run(["git", "push"])
+            
+            # Chain grit status at the end
+            run_status(state)
         else:
             console.print(f"[{WARN_COLOR}]⚠ Commit cancelled or failed.[/{WARN_COLOR}]")
 
@@ -371,14 +367,15 @@ def run_commit(state: StateManager, ctx: typer.Context):
             else:
                 console.print(f"[{SUCCESS_COLOR}]✓ Commit amended.[/{SUCCESS_COLOR}]")
             
-            # Post-commit actions for passthrough too
-            console.print(f"\n[{BRAND_COLOR}]--- Post-commit Status ---[/{BRAND_COLOR}]")
-            subprocess.run(["git", "status", "--short"])
-            
-            push_prompt = typer.confirm("Would you like to push these changes now?", default=True)
+            # Post-commit actions: Push and Status Chaining
+            console.print()
+            push_prompt = Confirm.ask(f"[{ACCENT_COLOR}]Would you like to push these changes now?[/]", default=True, console=console)
             if push_prompt:
                 console.print(f"[{BRAND_COLOR}]Pushing to remote...[/{BRAND_COLOR}]")
                 subprocess.run(["git", "push"])
+                
+            # Chain grit status at the end
+            run_status(state)
         else:
             # If execute_git_commit returns False, it means the commit failed or was cancelled
             pass

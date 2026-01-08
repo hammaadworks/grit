@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Grit Pro | Intelligence System</title>
+    <link rel="icon" type="image/svg+xml"
+          href="data:image/svg+xml,<svg width='100' height='100' viewBox='0 0 100 100' fill='none' xmlns='http://www.w3.org/2000/svg'><rect width='100' height='100' rx='20' fill='%2314B8A6'/><path d='M30 40L45 30L70 45L55 55L30 40Z' fill='white'/><path d='M30 40L45 30L45 55L30 70L30 40Z' fill='white' fill-opacity='0.8'/><path d='M70 45L55 55L55 70L70 55L70 45Z' fill='white' fill-opacity='0.6'/></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -171,629 +173,699 @@
 </head>
 <body>
 
-    <!-- Sidebar -->
-    <aside class="sidebar">
-        <div class="flex-1">
-            <div class="flex items-center gap-3 mb-12 px-2">
-                <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                    <i data-lucide="zap" class="text-black w-6 h-6 fill-current"></i>
-                </div>
-                <span class="text-2xl font-black tracking-tighter uppercase">GRIT</span>
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="flex-1">
+        <div class="flex items-center gap-3 mb-12 px-2">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
+                <svg width="40" height="40" viewBox="0 0 100 100" fill="none"
+                     xmlns="http://www.w3.org/2000/svg">
+                    <rect width="100" height="100" rx="20" fill="#14B8A6"/>
+                    <path d="M30 40L45 30L70 45L55 55L30 40Z" fill="white"/>
+                    <path d="M30 40L45 30L45 55L30 70L30 40Z" fill="white"
+                          fill-opacity="0.8"/>
+                    <path d="M70 45L55 55L55 70L70 55L70 45Z" fill="white"
+                          fill-opacity="0.6"/>
+                </svg>
             </div>
-
-            <nav class="space-y-1">
-                <a href="#" onclick="showTab('intelligence')" id="nav-intelligence" class="nav-item active"><i data-lucide="layout-grid" class="w-5 h-5"></i> System Intelligence</a>
-                <a href="#" onclick="showTab('pipeline')" id="nav-pipeline" class="nav-item"><i data-lucide="git-commit" class="w-5 h-5"></i> Commit Pipeline</a>
-                <a href="#" onclick="showTab('database')" id="nav-database" class="nav-item"><i data-lucide="database" class="w-5 h-5"></i> Local Database</a>
-                <a href="#" onclick="toggleSettings()" class="nav-item"><i data-lucide="settings" class="w-5 h-5"></i> Control Center</a>
-            </nav>
+            <span class="text-2xl font-black tracking-tighter uppercase">GRIT</span>
         </div>
 
-        <!-- Identity Card -->
-        <div class="bg-[#000a0a] border border-[#133838] rounded-xl p-5">
-            <div class="flex items-center gap-4 mb-4">
-                <div id="user_avatar" class="w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center font-bold text-lg text-white">U</div>
-                <div class="overflow-hidden">
-                    <p class="text-sm font-bold text-white truncate" id="sidebar_username">@username</p>
-                    <p class="text-[10px] font-bold text-[#14b8a6] uppercase tracking-tighter">Verified Node</p>
-                </div>
-            </div>
-            <div class="flex items-center gap-2 px-1">
-                <span class="w-1.5 h-1.5 bg-[#10b981] rounded-full pulse"></span>
-                <span class="text-[9px] font-bold text-[#94a3b8] tracking-widest mono uppercase">ENGINE_SYNCED</span>
-            </div>
-        </div>
-    </aside>
-
-    <!-- Main Content -->
-    <div class="main-content">
-        
-        <div id="tab-intelligence">
-            <!-- Header Section -->
-            <header class="mb-16">
-                <h1 class="h1">Intelligence Center</h1>
-                <p class="text-lg text-[#94a3b8] mt-2 font-medium">Real-time commit distribution and graph optimization analysis.</p>
-                
-                <!-- The "Fun" Rule Media Asset -->
-                <img src="https://media.tenor.com/bK1RAdR_iP4AAAAC/dog-coding.gif" alt="Coding Intensity" class="hero-image">
-            </header>
-
-            <!-- Metrics Row -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                
-                <div class="bento-card">
-                    <p class="label">Session Goal</p>
-                    <div class="flex items-baseline gap-2 mt-4 mb-6">
-                        <span class="stat-value text-white" id="today_count">0</span>
-                        <span class="text-2xl text-[#133838]">/ <span id="daily_target">0</span></span>
-                    </div>
-                    <div class="opt-bar">
-                        <div id="today_progress_bar" class="opt-fill" style="width: 0%"></div>
-                    </div>
-                </div>
-
-                <div class="bento-card">
-                    <p class="label text-yellow-500">Backlog Debt</p>
-                    <div class="flex items-baseline gap-3 mt-4">
-                        <h2 class="stat-value text-white" id="pending_commits">0</h2>
-                        <p class="text-xs font-bold text-[#94a3b8] uppercase">Pending</p>
-                    </div>
-                    <p class="text-[10px] text-[#94a3b8] mono mt-6">COMMITS_REQUIRED_FOR_ZERO_DEBT</p>
-                </div>
-
-                <div class="bento-card">
-                    <p class="label">Optimization</p>
-                    <h2 class="stat-value text-white mt-4" id="progress_pct">0.0%</h2>
-                    <div class="h-10 w-full mt-2 opacity-30">
-                        <canvas id="efficiencySparkline"></canvas>
-                    </div>
-                </div>
-
-                <div class="bento-card">
-                    <p class="label text-teal-500">Volume 2026</p>
-                    <h2 class="stat-value text-white mt-4" id="yearly_done">0</h2>
-                    <p class="text-[10px] text-[#94a3b8] mt-6 mono uppercase">VERIFIED_CONTRIBUTIONS</p>
-                </div>
-
-            </div>
-
-            <!-- System Visualization Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
-                <!-- Global Contribution Wall -->
-                <div class="bento-card lg:col-span-12">
-                    <div class="flex items-center justify-between mb-10">
-                        <h3 class="text-lg font-bold flex items-center gap-3">
-                            <i data-lucide="layers" class="w-5 h-5 text-[#14b8a6]"></i>
-                            Contribution Integrity
-                        </h3>
-                        <div class="flex items-center gap-4">
-                            <span class="text-[10px] font-bold text-[#94a3b8] mono">INTENSITY</span>
-                            <div class="flex gap-1">
-                                <div class="lvl-0 w-3 h-3 rounded-sm"></div>
-                                <div class="lvl-1 w-3 h-3 rounded-sm"></div>
-                                <div class="lvl-2 w-3 h-3 rounded-sm"></div>
-                                <div class="lvl-3 w-3 h-3 rounded-sm"></div>
-                                <div class="lvl-4 w-3 h-3 rounded-sm"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="overflow-x-auto pb-4">
-                        <div id="contribution_graph" class="contribution-grid"></div>
-                    </div>
-                    <div id="tile_info" class="hidden mt-4 p-4 rounded-xl bg-black border border-[#14b8a6]/30 animate-in fade-in slide-in-from-top-2">
-                        <div class="flex items-center gap-4">
-                            <div id="tile_info_color" class="w-4 h-4 rounded-sm"></div>
-                            <div>
-                                <p class="text-[10px] font-black text-[#14b8a6] uppercase tracking-widest">Selected Intelligence Point</p>
-                                <p class="text-white font-bold"><span id="tile_info_date"></span> — <span id="tile_info_count"></span> commits</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex justify-between items-center text-[10px] text-[#94a3b8] font-bold mono uppercase border-t border-[#133838] pt-8 mt-6">
-                        <p>SNAPSHOT: <span id="last_sync_time">--:--:--</span></p>
-                        <p>STRATEGY: <span id="current_strategy">TODAY_FIRST</span></p>
-                    </div>
-                </div>
-
-                <!-- Pipeline Analysis -->
-                <div class="bento-card lg:col-span-5">
-                    <h3 class="text-lg font-bold mb-8">Allocation Queue</h3>
-                    <div id="pipeline_list" class="space-y-1"></div>
-                    <div class="mt-10 p-5 rounded-lg bg-black border border-[#133838]">
-                        <p class="label text-teal-500 mb-2">Next Priority Pointer</p>
-                        <p class="text-xl font-black mono text-white" id="next_slot_date">--</p>
-                    </div>
-                </div>
-
-                <!-- Velocity Visualization -->
-                <div class="bento-card lg:col-span-7">
-                    <h3 class="text-lg font-bold mb-10">Activity Velocity (30D)</h3>
-                    <div class="h-[280px]">
-                        <canvas id="velocityChart"></canvas>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-        <div id="tab-database" class="hidden">
-            <header class="mb-12">
-                <h1 class="text-4xl font-black tracking-tighter uppercase">Local Database</h1>
-                <p class="text-[#94a3b8] font-medium">Direct inspection and atomic modification of system state.</p>
-            </header>
-
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div class="bento-card lg:col-span-3">
-                    <h3 class="text-lg font-bold mb-6">Tables</h3>
-                    <div id="db-tables-list" class="space-y-2"></div>
-                </div>
-                <div class="bento-card lg:col-span-9">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-bold" id="current-table-name">Select a table</h3>
-                        <div class="flex gap-4">
-                            <button onclick="addRow()" class="bg-[#14b8a6] text-black text-[10px] font-black px-4 py-2 rounded uppercase">Add Row</button>
-                        </div>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr id="table-header" class="border-b border-[#133838] text-[10px] font-black text-[#94a3b8] uppercase tracking-widest">
-                                </tr>
-                            </thead>
-                            <tbody id="table-body" class="text-sm">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- System Footer -->
-        <footer class="mt-20 py-12 border-t border-[#133838] flex justify-between items-center text-[#94a3b8] text-xs font-bold mono">
-            <div class="flex items-center gap-8">
-                <span>GRIT_ENGINE_STABLE</span>
-                <span>BUILD_2026_MAR_29</span>
-            </div>
-            <div class="flex gap-10 uppercase tracking-widest">
-                <a href="#" class="hover:text-white transition-colors">Docs</a>
-                <a href="#" class="hover:text-white transition-colors">GitHub</a>
-            </div>
-        </footer>
-
+        <nav class="space-y-1">
+            <a href="#" onclick="showTab('intelligence')" id="nav-intelligence"
+               class="nav-item active"><i data-lucide="layout-grid"
+                                          class="w-5 h-5"></i> System
+                Intelligence</a>
+            <a href="#" onclick="showTab('pipeline')" id="nav-pipeline"
+               class="nav-item"><i data-lucide="git-commit" class="w-5 h-5"></i>
+                Commit Pipeline</a>
+            <a href="#" onclick="showTab('database')" id="nav-database"
+               class="nav-item"><i data-lucide="database" class="w-5 h-5"></i>
+                Local Database</a>
+            <a href="#" onclick="toggleSettings()" class="nav-item"><i
+                    data-lucide="settings" class="w-5 h-5"></i> Control
+                Center</a>
+        </nav>
     </div>
 
-    <!-- Control Center Modal -->
-    <div id="settings_panel">
-        <div class="bg-[#000505] border border-[#133838] rounded-2xl p-12 w-full max-w-4xl animate-reveal">
-            <div class="flex items-center justify-between mb-12">
-                <div>
-                    <h2 class="text-3xl font-black tracking-tighter">Control Center</h2>
-                    <p class="text-sm text-[#94a3b8] font-medium">Fine-tune global commit distribution policies.</p>
+    <!-- Identity Card -->
+    <div class="bg-[#000a0a] border border-[#133838] rounded-xl p-5">
+        <div class="flex items-center gap-4 mb-4">
+            <div id="user_avatar"
+                 class="w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center font-bold text-lg text-white">
+                U
+            </div>
+            <div class="overflow-hidden">
+                <p class="text-sm font-bold text-white truncate"
+                   id="sidebar_username">@username</p>
+                <p class="text-[10px] font-bold text-[#14b8a6] uppercase tracking-tighter">
+                    Verified Node</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 px-1">
+            <span class="w-1.5 h-1.5 bg-[#10b981] rounded-full pulse"></span>
+            <span class="text-[9px] font-bold text-[#94a3b8] tracking-widest mono uppercase">ENGINE_SYNCED</span>
+        </div>
+    </div>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+
+    <div id="tab-intelligence">
+        <!-- Header Section -->
+        <header class="mb-16">
+            <h1 class="h1">Intelligence Center</h1>
+            <p class="text-lg text-[#94a3b8] mt-2 font-medium">Real-time commit
+                distribution and graph optimization analysis.</p>
+
+            <!-- The "Fun" Rule Media Asset -->
+            <img src="https://media.tenor.com/bK1RAdR_iP4AAAAC/dog-coding.gif"
+                 alt="Coding Intensity" class="hero-image">
+        </header>
+
+        <!-- Metrics Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+
+            <div class="bento-card">
+                <p class="label">Session Goal</p>
+                <div class="flex items-baseline gap-2 mt-4 mb-6">
+                    <span class="stat-value text-white"
+                          id="today_count">0</span>
+                    <span class="text-2xl text-[#133838]">/ <span
+                            id="daily_target">0</span></span>
                 </div>
-                <button onclick="toggleSettings()" class="w-10 h-10 rounded-full border border-[#133838] flex items-center justify-center hover:bg-[#133838]/20">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
+                <div class="opt-bar">
+                    <div id="today_progress_bar" class="opt-fill"
+                         style="width: 0%"></div>
+                </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
-                <div class="space-y-6">
-                    <div class="space-y-2">
-                        <label class="label">GitHub Identity</label>
-                        <input id="input_username" type="text" class="input-grit" placeholder="username">
-                    </div>
-                    <div class="space-y-2">
-                        <label class="label">Daily Goal</label>
-                        <input id="input_target" type="number" class="input-grit" placeholder="1">
-                    </div>
-                    <div class="space-y-2">
-                        <label class="label">Start Date</label>
-                        <input id="input_start_date" type="date" class="input-grit">
-                    </div>
-                    <div class="space-y-2">
-                        <label class="label">Policy</label>
-                        <select id="input_fill_strategy" class="input-grit appearance-none">
-                            <option value="today">Today First (Standard)</option>
-                            <option value="start_date">Start Date First (Forward)</option>
-                        </select>
-                    </div>
+            <div class="bento-card">
+                <p class="label text-yellow-500">Backlog Debt</p>
+                <div class="flex items-baseline gap-3 mt-4">
+                    <h2 class="stat-value text-white" id="pending_commits">
+                        0</h2>
+                    <p class="text-xs font-bold text-[#94a3b8] uppercase">
+                        Pending</p>
                 </div>
-                <div class="bg-[#000a0a] rounded-xl p-8 border border-[#133838] space-y-6">
-                    <p class="label text-[#14b8a6]">AI Intelligence Core</p>
-                    <div class="space-y-4">
-                        <input id="input_ai_url" type="text" class="input-grit" placeholder="Endpoint URL">
-                        <input id="input_ai_key" type="password" class="input-grit" placeholder="API Key">
-                        <input id="input_ai_model" type="text" class="input-grit" placeholder="Model ID">
-                    </div>
-                    <p class="text-xs text-[#94a3b8] leading-relaxed italic">Used for automated semantic message generation in the interactive wizard.</p>
+                <p class="text-[10px] text-[#94a3b8] mono mt-6">
+                    COMMITS_REQUIRED_FOR_ZERO_DEBT</p>
+            </div>
+
+            <div class="bento-card">
+                <p class="label">Optimization</p>
+                <h2 class="stat-value text-white mt-4" id="progress_pct">
+                    0.0%</h2>
+                <div class="h-10 w-full mt-2 opacity-30">
+                    <canvas id="efficiencySparkline"></canvas>
                 </div>
             </div>
 
-            <div class="mt-12 pt-8 border-t border-[#133838] flex justify-end">
-                <button id="save_btn" onclick="saveSettings()" class="bg-[#14b8a6] text-black font-black px-10 py-4 rounded-lg hover:brightness-110 active:scale-95 transition-all">
-                    Apply Optimization Policy
-                </button>
+            <div class="bento-card">
+                <p class="label text-teal-500">Volume 2026</p>
+                <h2 class="stat-value text-white mt-4" id="yearly_done">0</h2>
+                <p class="text-[10px] text-[#94a3b8] mt-6 mono uppercase">
+                    VERIFIED_CONTRIBUTIONS</p>
+            </div>
+
+        </div>
+
+        <!-- System Visualization Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Global Contribution Wall -->
+            <div class="bento-card lg:col-span-12">
+                <div class="flex items-center justify-between mb-10">
+                    <h3 class="text-lg font-bold flex items-center gap-3">
+                        <i data-lucide="layers"
+                           class="w-5 h-5 text-[#14b8a6]"></i>
+                        Contribution Integrity
+                    </h3>
+                    <div class="flex items-center gap-4">
+                        <span class="text-[10px] font-bold text-[#94a3b8] mono">INTENSITY</span>
+                        <div class="flex gap-1">
+                            <div class="lvl-0 w-3 h-3 rounded-sm"></div>
+                            <div class="lvl-1 w-3 h-3 rounded-sm"></div>
+                            <div class="lvl-2 w-3 h-3 rounded-sm"></div>
+                            <div class="lvl-3 w-3 h-3 rounded-sm"></div>
+                            <div class="lvl-4 w-3 h-3 rounded-sm"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto pb-4">
+                    <div id="contribution_graph"
+                         class="contribution-grid"></div>
+                </div>
+                <div id="tile_info"
+                     class="hidden mt-4 p-4 rounded-xl bg-black border border-[#14b8a6]/30 animate-in fade-in slide-in-from-top-2">
+                    <div class="flex items-center gap-4">
+                        <div id="tile_info_color"
+                             class="w-4 h-4 rounded-sm"></div>
+                        <div>
+                            <p class="text-[10px] font-black text-[#14b8a6] uppercase tracking-widest">
+                                Selected Intelligence Point</p>
+                            <p class="text-white font-bold"><span
+                                    id="tile_info_date"></span> — <span
+                                    id="tile_info_count"></span> commits</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center text-[10px] text-[#94a3b8] font-bold mono uppercase border-t border-[#133838] pt-8 mt-6">
+                    <p>SNAPSHOT: <span id="last_sync_time">--:--:--</span></p>
+                    <p>STRATEGY: <span id="current_strategy">TODAY_FIRST</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Pipeline Analysis -->
+            <div class="bento-card lg:col-span-5">
+                <h3 class="text-lg font-bold mb-8">Allocation Queue</h3>
+                <div id="pipeline_list" class="space-y-1"></div>
+                <div class="mt-10 p-5 rounded-lg bg-black border border-[#133838]">
+                    <p class="label text-teal-500 mb-2">Next Priority
+                        Pointer</p>
+                    <p class="text-xl font-black mono text-white"
+                       id="next_slot_date">--</p>
+                </div>
+            </div>
+
+            <!-- Velocity Visualization -->
+            <div class="bento-card lg:col-span-7">
+                <h3 class="text-lg font-bold mb-10">Activity Velocity (30D)</h3>
+                <div class="h-[280px]">
+                    <canvas id="velocityChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="tab-database" class="hidden">
+        <header class="mb-12">
+            <h1 class="text-4xl font-black tracking-tighter uppercase">Local
+                Database</h1>
+            <p class="text-[#94a3b8] font-medium">Direct inspection and atomic
+                modification of system state.</p>
+            <div class="mt-4 inline-flex items-center gap-2 bg-[#0d1117] border border-[#133838] px-3 py-1.5 rounded-lg text-xs font-mono text-[#14b8a6]">
+                <i data-lucide="hard-drive" class="w-4 h-4"></i>
+                <span id="db_path_display">Loading path...</span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="bento-card lg:col-span-3">
+                <h3 class="text-lg font-bold mb-6">Tables</h3>
+                <div id="db-tables-list" class="space-y-2"></div>
+            </div>
+            <div class="bento-card lg:col-span-9">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-bold" id="current-table-name">Select
+                        a table</h3>
+                    <div class="flex gap-4">
+                        <button onclick="addRow()"
+                                class="bg-[#14b8a6] text-black text-[10px] font-black px-4 py-2 rounded uppercase">
+                            Add Row
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                        <tr id="table-header"
+                            class="border-b border-[#133838] text-[10px] font-black text-[#94a3b8] uppercase tracking-widest">
+                        </tr>
+                        </thead>
+                        <tbody id="table-body" class="text-sm">
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
-    <script>
-        lucide.createIcons();
-        let currentConfig = {};
-        let charts = {};
+    <!-- System Footer -->
+    <footer class="mt-20 py-12 border-t border-[#133838] flex justify-between items-center text-[#94a3b8] text-xs font-bold mono">
+        <div class="flex items-center gap-8">
+            <span>GRIT_ENGINE_STABLE</span>
+            <span>BUILD_2026_MAR_29</span>
+        </div>
+        <div class="flex gap-10 uppercase tracking-widest">
+            <a href="#" class="hover:text-white transition-colors">Docs</a>
+            <a href="#" class="hover:text-white transition-colors">GitHub</a>
+        </div>
+    </footer>
 
-        function showTab(tabId) {
-            // Update Navigation
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            document.getElementById(`nav-${tabId}`).classList.add('active');
+</div>
 
-            const targetTab = (tabId === 'pipeline') ? 'intelligence' : tabId;
+<!-- Control Center Modal -->
+<div id="settings_panel">
+    <div class="bg-[#000505] border border-[#133838] rounded-2xl p-12 w-full max-w-4xl animate-reveal">
+        <div class="flex items-center justify-between mb-12">
+            <div>
+                <h2 class="text-3xl font-black tracking-tighter">Control
+                    Center</h2>
+                <p class="text-sm text-[#94a3b8] font-medium">Fine-tune global
+                    commit distribution policies.</p>
+            </div>
+            <button onclick="toggleSettings()"
+                    class="w-10 h-10 rounded-full border border-[#133838] flex items-center justify-center hover:bg-[#133838]/20">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
 
-            // Toggle Containers
-            document.getElementById('tab-intelligence').classList.add('hidden');
-            document.getElementById('tab-database').classList.add('hidden');
-            document.getElementById(`tab-${targetTab}`).classList.remove('hidden');
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+            <div class="space-y-6">
+                <div class="space-y-2">
+                    <label class="label">GitHub Identity</label>
+                    <input id="input_username" type="text" class="input-grit"
+                           placeholder="username">
+                </div>
+                <div class="space-y-2">
+                    <label class="label">Daily Goal</label>
+                    <input id="input_target" type="number" class="input-grit"
+                           placeholder="1">
+                </div>
+                <div class="space-y-2">
+                    <label class="label">Start Date</label>
+                    <input id="input_start_date" type="date" class="input-grit">
+                </div>
+                <div class="space-y-2">
+                    <label class="label">Policy</label>
+                    <select id="input_fill_strategy"
+                            class="input-grit appearance-none">
+                        <option value="today">Today First (Standard)</option>
+                        <option value="start_date">Start Date First (Forward)
+                        </option>
+                    </select>
+                </div>
+            </div>
+            <div class="bg-[#000a0a] rounded-xl p-8 border border-[#133838] space-y-6">
+                <p class="label text-[#14b8a6]">AI Intelligence Core</p>
+                <div class="space-y-4">
+                    <input id="input_ai_url" type="text" class="input-grit"
+                           placeholder="Endpoint URL">
+                    <input id="input_ai_key" type="password" class="input-grit"
+                           placeholder="API Key">
+                    <input id="input_ai_model" type="text" class="input-grit"
+                           placeholder="Model ID">
+                </div>
+                <p class="text-xs text-[#94a3b8] leading-relaxed italic">Used
+                    for automated semantic message generation in the interactive
+                    wizard.</p>
+            </div>
+        </div>
 
-            if (tabId === 'database') loadTables();
-            if (tabId === 'pipeline') {
+        <div class="mt-12 pt-8 border-t border-[#133838] flex justify-end">
+            <button id="save_btn" onclick="saveSettings()"
+                    class="bg-[#14b8a6] text-black font-black px-10 py-4 rounded-lg hover:brightness-110 active:scale-95 transition-all">
+                Apply Optimization Policy
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    lucide.createIcons();
+    let currentConfig = {};
+    let charts = {};
+
+    function showTab(tabId) {
+        // Update Navigation
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        document.getElementById(`nav-${tabId}`).classList.add('active');
+
+        const targetTab = (tabId === 'pipeline') ? 'intelligence' : tabId;
+
+        // Toggle Containers
+        document.getElementById('tab-intelligence').classList.add('hidden');
+        document.getElementById('tab-database').classList.add('hidden');
+        document.getElementById(`tab-${targetTab}`).classList.remove('hidden');
+
+        if (tabId === 'database') loadTables();
+        if (tabId === 'pipeline') {
+            setTimeout(() => {
+                document.getElementById('pipeline_list').parentElement.scrollIntoView({behavior:'smooth'});
+            }, 100);
+        }
+    }
+
+    let selectedTable = null;
+
+    async function loadTables() {
+        try {
+            const response = await fetch('/api/db/tables');
+            const tables = await response.json();
+            const container = document.getElementById('db-tables-list');
+            container.innerHTML = '';
+            tables.forEach(table => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left px-4 py-3 rounded-lg border border-[#133838] hover:bg-[#133838]/30 transition-all font-bold text-sm text-[#94a3b8] hover:text-[#14b8a6]';
+                btn.textContent = table.toUpperCase();
+                btn.onclick = () => loadTableData(table);
+                container.appendChild(btn);
+            });
+        } catch (e) { console.error('DB_LOAD_ERROR:', e); }
+    }
+
+    async function loadTableData(table) {
+        selectedTable = table;
+        document.getElementById('current-table-name').textContent = table.toUpperCase();
+        try {
+            const response = await fetch(`/api/db/data?table=${table}`);
+            const rows = await response.json();
+
+            const header = document.getElementById('table-header');
+            const body = document.getElementById('table-body');
+            header.innerHTML = '';
+            body.innerHTML = '';
+
+            if (rows.length > 0 || table) {
+                const cols = table === 'config' ? ['key', 'value'] : ['date', 'count'];
+                cols.forEach(col => {
+                    const th = document.createElement('th');
+                    th.className = 'py-4 px-2';
+                    th.textContent = col;
+                    header.appendChild(th);
+                });
+                const actionTh = document.createElement('th');
+                actionTh.className = 'py-4 px-2 text-right';
+                actionTh.textContent = 'Actions';
+                header.appendChild(actionTh);
+
+                rows.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-[#133838]/30 hover:bg-white/[0.02] transition-colors';
+                    row.forEach((cell, idx) => {
+                        const td = document.createElement('td');
+                        td.className = 'py-4 px-2 text-white font-medium';
+                        td.textContent = cell;
+                        tr.appendChild(td);
+                    });
+
+                    const actionsTd = document.createElement('td');
+                    actionsTd.className = 'py-4 px-2 text-right space-x-2';
+
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'text-[#14b8a6] hover:underline text-[10px] font-bold uppercase';
+                    editBtn.textContent = 'Edit';
+                    editBtn.onclick = () => editRow(table, row);
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'text-rose-500 hover:underline text-[10px] font-bold uppercase';
+                    deleteBtn.textContent = 'Delete';
+                    deleteBtn.onclick = () => deleteRow(table, row[0]);
+
+                    actionsTd.appendChild(editBtn);
+                    actionsTd.appendChild(deleteBtn);
+                    tr.appendChild(actionsTd);
+                    body.appendChild(tr);
+                });
+            }
+        } catch (e) { console.error('TABLE_DATA_ERROR:', e); }
+    }
+
+    async function editRow(table, row) {
+        const newValues = [];
+        const cols = table === 'config' ? ['key', 'value'] : ['date', 'count'];
+        for (let i = 0; i < row.length; i++) {
+            const val = prompt(`Enter new value for ${cols[i]}:`, row[i]);
+            if (val === null) return;
+            newValues.push(val);
+        }
+
+        try {
+            await fetch('/api/db/edit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table, row: newValues })
+            });
+            loadTableData(table);
+            fetchData(); // Refresh metrics
+        } catch (e) { alert('Update failed'); }
+    }
+
+    async function deleteRow(table, pk) {
+        if (!confirm(`Are you sure you want to delete row ${pk}?`)) return;
+        try {
+            await fetch('/api/db/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table, pk })
+            });
+            loadTableData(table);
+            fetchData(); // Refresh metrics
+        } catch (e) { alert('Delete failed'); }
+    }
+
+    async function addRow() {
+        if (!selectedTable) return alert('Select a table first');
+        const row = [];
+        const cols = selectedTable === 'config' ? ['key', 'value'] : ['date', 'count'];
+        for (const col of cols) {
+            const val = prompt(`Enter ${col}:`);
+            if (val === null) return;
+            row.push(val);
+        }
+        try {
+            await fetch('/api/db/edit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table: selectedTable, row })
+            });
+            loadTableData(selectedTable);
+            fetchData(); // Refresh metrics
+        } catch (e) { alert('Add failed'); }
+    }
+
+    async function fetchData() {
+        try {
+            // FORCE REFRESH: Append timestamp to bypass caching
+            const response = await fetch(`/api/stats?t=${Date.now()}`);
+            const data = await response.json();
+
+            // CRITICAL: Update global config reference
+            currentConfig = data.config;
+
+            updateUI(data);
+            document.getElementById('last_sync_time').textContent = new Date().toLocaleTimeString();
+        } catch (error) { console.error('SYSTEM_SYNC_ERROR:', error); }
+    }
+
+    function toggleSettings() {
+        const el = document.getElementById('settings_panel');
+        el.classList.toggle('active');
+        if (el.classList.contains('active')) populateInputs(currentConfig);
+    }
+
+    function populateInputs(config) {
+        document.getElementById('input_username').value = config.username || '';
+        document.getElementById('input_target').value = config.target || 1;
+        document.getElementById('input_start_date').value = config.start_date || '';
+        document.getElementById('input_fill_strategy').value = config.fill_strategy || 'start_date';
+        document.getElementById('input_ai_url').value = config.ai_base_url || '';
+        document.getElementById('input_ai_key').value = config.ai_api_key || '';
+        document.getElementById('input_ai_model').value = config.ai_model || '';
+    }
+
+    async function saveSettings() {
+        const btn = document.getElementById('save_btn');
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'SYNCHRONIZING...';
+
+        const payload = {
+            github_username: document.getElementById('input_username').value,
+            daily_target: parseInt(document.getElementById('input_target').value),
+            start_date: document.getElementById('input_start_date').value,
+            fill_strategy: document.getElementById('input_fill_strategy').value,
+            ai_base_url: document.getElementById('input_ai_url').value,
+            ai_api_key: document.getElementById('input_ai_key').value,
+            ai_model: document.getElementById('input_ai_model').value
+        };
+
+        try {
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                btn.textContent = 'OPTIMIZED';
                 setTimeout(() => {
-                    document.getElementById('pipeline_list').parentElement.scrollIntoView({behavior:'smooth'});
-                }, 100);
+                    btn.disabled = false;
+                    btn.textContent = original;
+                    toggleSettings();
+                    fetchData(); // Immediately refresh with new DB values
+                }, 800);
             }
+        } catch (e) {
+            btn.textContent = 'SYNC_ERROR';
+            btn.disabled = false;
+        }
+    }
+
+    function updateUI(data) {
+        const { config, metrics, pipeline, history, monthly_stats } = data;
+
+        // 👤 Identity Integration (Handle placeholders)
+        const isConfigured = config.username && config.username !== 'Not configured';
+        const rawUser = isConfigured ? config.username : 'UNCONFIGURED';
+
+        document.getElementById('sidebar_username').textContent = `@${rawUser}`;
+        document.getElementById('user_avatar').textContent = rawUser.charAt(0).toUpperCase();
+        document.getElementById('user_avatar').className = isConfigured
+            ? "w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center font-bold text-lg text-white"
+            : "w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-lg text-zinc-500";
+
+        // 📊 Primary Statistics
+        document.getElementById('progress_pct').textContent = `${metrics.progress_pct.toFixed(1)}%`;
+        document.getElementById('pending_commits').textContent = metrics.pending;
+        document.getElementById('today_count').textContent = metrics.today_count;
+        document.getElementById('daily_target').textContent = config.target || 1;
+        document.getElementById('yearly_done').textContent = metrics.yearly_done;
+        document.getElementById('current_strategy').textContent = (config.fill_strategy || 'start_date').toUpperCase() + '_FIRST';
+        document.getElementById('last_sync_time').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+
+        if (config.db_path) {
+            document.getElementById('db_path_display').textContent = config.db_path;
         }
 
-        let selectedTable = null;
+        // 🟩 Optimization Bar
+        const target = config.target || 1;
+        document.getElementById('today_progress_bar').style.width = `${Math.min(100, (metrics.today_count / target) * 100)}%`;
 
-        async function loadTables() {
-            try {
-                const response = await fetch('/api/db/tables');
-                const tables = await response.json();
-                const container = document.getElementById('db-tables-list');
-                container.innerHTML = '';
-                tables.forEach(table => {
-                    const btn = document.createElement('button');
-                    btn.className = 'w-full text-left px-4 py-3 rounded-lg border border-[#133838] hover:bg-[#133838]/30 transition-all font-bold text-sm text-[#94a3b8] hover:text-[#14b8a6]';
-                    btn.textContent = table.toUpperCase();
-                    btn.onclick = () => loadTableData(table);
-                    container.appendChild(btn);
-                });
-            } catch (e) { console.error('DB_LOAD_ERROR:', e); }
-        }
+        // ⛓️ Pipeline View
+        const container = document.getElementById('pipeline_list');
+        container.innerHTML = '';
+        document.getElementById('next_slot_date').textContent = '--';
+        pipeline.forEach((item, idx) => {
+            const div = document.createElement('div');
+            div.className = 'flex justify-between items-center py-3 border-b border-[#133838]/50 last:border-none';
 
-        async function loadTableData(table) {
-            selectedTable = table;
-            document.getElementById('current-table-name').textContent = table.toUpperCase();
-            try {
-                const response = await fetch(`/api/db/data?table=${table}`);
-                const rows = await response.json();
-                
-                const header = document.getElementById('table-header');
-                const body = document.getElementById('table-body');
-                header.innerHTML = '';
-                body.innerHTML = '';
+            let label = '';
+            if (idx === 0) label = 'Today';
+            else if (idx === 1) label = 'Next';
+            else if (idx === 2) label = 'Then';
+            else label = 'Later';
 
-                if (rows.length > 0 || table) {
-                    const cols = table === 'config' ? ['key', 'value'] : ['date', 'count'];
-                    cols.forEach(col => {
-                        const th = document.createElement('th');
-                        th.className = 'py-4 px-2';
-                        th.textContent = col;
-                        header.appendChild(th);
-                    });
-                    const actionTh = document.createElement('th');
-                    actionTh.className = 'py-4 px-2 text-right';
-                    actionTh.textContent = 'Actions';
-                    header.appendChild(actionTh);
-
-                    rows.forEach(row => {
-                        const tr = document.createElement('tr');
-                        tr.className = 'border-b border-[#133838]/30 hover:bg-white/[0.02] transition-colors';
-                        row.forEach((cell, idx) => {
-                            const td = document.createElement('td');
-                            td.className = 'py-4 px-2 text-white font-medium';
-                            td.textContent = cell;
-                            tr.appendChild(td);
-                        });
-                        
-                        const actionsTd = document.createElement('td');
-                        actionsTd.className = 'py-4 px-2 text-right space-x-2';
-                        
-                        const editBtn = document.createElement('button');
-                        editBtn.className = 'text-[#14b8a6] hover:underline text-[10px] font-bold uppercase';
-                        editBtn.textContent = 'Edit';
-                        editBtn.onclick = () => editRow(table, row);
-                        
-                        const deleteBtn = document.createElement('button');
-                        deleteBtn.className = 'text-rose-500 hover:underline text-[10px] font-bold uppercase';
-                        deleteBtn.textContent = 'Delete';
-                        deleteBtn.onclick = () => deleteRow(table, row[0]);
-
-                        actionsTd.appendChild(editBtn);
-                        actionsTd.appendChild(deleteBtn);
-                        tr.appendChild(actionsTd);
-                        body.appendChild(tr);
-                    });
-                }
-            } catch (e) { console.error('TABLE_DATA_ERROR:', e); }
-        }
-
-        async function editRow(table, row) {
-            const newValues = [];
-            const cols = table === 'config' ? ['key', 'value'] : ['date', 'count'];
-            for (let i = 0; i < row.length; i++) {
-                const val = prompt(`Enter new value for ${cols[i]}:`, row[i]);
-                if (val === null) return;
-                newValues.push(val);
+            const isFull = item.count >= item.target;
+            // Highlight the first non-full slot as the next priority
+            if (!document.getElementById('next_slot_date').textContent || document.getElementById('next_slot_date').textContent === '--') {
+                if (!isFull) document.getElementById('next_slot_date').textContent = item.date;
             }
-            
-            try {
-                await fetch('/api/db/edit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ table, row: newValues })
-                });
-                loadTableData(table);
-                fetchData(); // Refresh metrics
-            } catch (e) { alert('Update failed'); }
-        }
+            div.innerHTML = `
+                <div>
+                    <p class="text-[12px] font-bold ${isFull ? 'text-[#f0fdfa]' : 'text-[#94a3b8]'}">${label}</p>
+                    <p class="text-[9px] mono text-[#133838]">${item.date}</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-[11px] mono font-black ${isFull ? 'text-[#10b981]' : 'text-[#14b8a6]'}">${item.count}/${item.target}</span>
+                </div>
+            `;
+            container.appendChild(div);
+        });
 
-        async function deleteRow(table, pk) {
-            if (!confirm(`Are you sure you want to delete row ${pk}?`)) return;
-            try {
-                await fetch('/api/db/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ table, pk })
-                });
-                loadTableData(table);
-                fetchData(); // Refresh metrics
-            } catch (e) { alert('Delete failed'); }
-        }
+        // 🗺️ Visual Grids
+        renderGraph(history, config.target);
+        renderSparkline(monthly_stats);
+        renderMainChart(history.slice(-30));
+    }
 
-        async function addRow() {
-            if (!selectedTable) return alert('Select a table first');
-            const row = [];
-            const cols = selectedTable === 'config' ? ['key', 'value'] : ['date', 'count'];
-            for (const col of cols) {
-                const val = prompt(`Enter ${col}:`);
-                if (val === null) return;
-                row.push(val);
+    function renderGraph(history, target) {
+        const graph = document.getElementById('contribution_graph');
+        graph.innerHTML = '';
+        const cells = history.slice(-371);
+        cells.forEach(day => {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.title = `${day.date}: ${day.count} commits`;
+            const ratio = day.count / target;
+            let lvl = 0;
+            if (day.count > 0) {
+                if (ratio >= 1) lvl = 4;
+                else if (ratio >= 0.75) lvl = 3;
+                else if (ratio >= 0.5) lvl = 2;
+                else lvl = 1;
             }
-            try {
-                await fetch('/api/db/edit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ table: selectedTable, row })
-                });
-                loadTableData(selectedTable);
-                fetchData(); // Refresh metrics
-            } catch (e) { alert('Add failed'); }
-        }
+            cell.classList.add(`lvl-${lvl}`);
 
-        async function fetchData() {
-            try {
-                // FORCE REFRESH: Append timestamp to bypass caching
-                const response = await fetch(`/api/stats?t=${Date.now()}`);
-                const data = await response.json();
-                
-                // CRITICAL: Update global config reference
-                currentConfig = data.config;
-                
-                updateUI(data);
-                document.getElementById('last_sync_time').textContent = new Date().toLocaleTimeString();
-            } catch (error) { console.error('SYSTEM_SYNC_ERROR:', error); }
-        }
+            // Click listener for tile info
+            cell.onclick = () => {
+                const infoBox = document.getElementById('tile_info');
+                const infoDate = document.getElementById('tile_info_date');
+                const infoCount = document.getElementById('tile_info_count');
+                const infoColor = document.getElementById('tile_info_color');
 
-        function toggleSettings() {
-            const el = document.getElementById('settings_panel');
-            el.classList.toggle('active');
-            if (el.classList.contains('active')) populateInputs(currentConfig);
-        }
-
-        function populateInputs(config) {
-            document.getElementById('input_username').value = config.username || '';
-            document.getElementById('input_target').value = config.target || 1;
-            document.getElementById('input_start_date').value = config.start_date || '';
-            document.getElementById('input_fill_strategy').value = config.fill_strategy || 'start_date';
-            document.getElementById('input_ai_url').value = config.ai_base_url || '';
-            document.getElementById('input_ai_key').value = config.ai_api_key || '';
-            document.getElementById('input_ai_model').value = config.ai_model || '';
-        }
-
-        async function saveSettings() {
-            const btn = document.getElementById('save_btn');
-            const original = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'SYNCHRONIZING...';
-
-            const payload = {
-                github_username: document.getElementById('input_username').value,
-                daily_target: parseInt(document.getElementById('input_target').value),
-                start_date: document.getElementById('input_start_date').value,
-                fill_strategy: document.getElementById('input_fill_strategy').value,
-                ai_base_url: document.getElementById('input_ai_url').value,
-                ai_api_key: document.getElementById('input_ai_key').value,
-                ai_model: document.getElementById('input_ai_model').value
+                infoBox.classList.remove('hidden');
+                infoDate.textContent = day.date;
+                infoCount.textContent = day.count;
+                infoColor.className = `w-4 h-4 rounded-sm lvl-${lvl}`;
             };
 
-            try {
-                const response = await fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                
-                if (response.ok) {
-                    btn.textContent = 'OPTIMIZED';
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.textContent = original;
-                        toggleSettings();
-                        fetchData(); // Immediately refresh with new DB values
-                    }, 800);
-                }
-            } catch (e) {
-                btn.textContent = 'SYNC_ERROR';
-                btn.disabled = false;
+            graph.appendChild(cell);
+        });
+    }
+
+    function renderSparkline(stats) {
+        const ctx = document.getElementById('efficiencySparkline').getContext('2d');
+        if (charts.spark) charts.spark.destroy();
+        charts.spark = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: stats.map(s => s.month),
+                datasets: [{
+                    data: stats.map(s => s.count),
+                    borderColor: '#14b8a6',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { display: false } }
             }
-        }
+        });
+    }
 
-        function updateUI(data) {
-            const { config, metrics, pipeline, history, monthly_stats } = data;
-            
-            // 👤 Identity Integration (Handle placeholders)
-            const isConfigured = config.username && config.username !== 'Not configured';
-            const rawUser = isConfigured ? config.username : 'UNCONFIGURED';
-            
-            document.getElementById('sidebar_username').textContent = `@${rawUser}`;
-            document.getElementById('user_avatar').textContent = rawUser.charAt(0).toUpperCase();
-            document.getElementById('user_avatar').className = isConfigured 
-                ? "w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center font-bold text-lg text-white"
-                : "w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-lg text-zinc-500";
-            
-            // 📊 Primary Statistics
-            document.getElementById('progress_pct').textContent = `${metrics.progress_pct.toFixed(1)}%`;
-            document.getElementById('pending_commits').textContent = metrics.pending;
-            document.getElementById('today_count').textContent = metrics.today_count;
-            document.getElementById('daily_target').textContent = config.target || 1;
-            document.getElementById('yearly_done').textContent = metrics.yearly_done;
-            document.getElementById('current_strategy').textContent = (config.fill_strategy || 'start_date').toUpperCase() + '_FIRST';
-            document.getElementById('last_sync_time').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-
-            // 🟩 Optimization Bar
-            const target = config.target || 1;
-            document.getElementById('today_progress_bar').style.width = `${Math.min(100, (metrics.today_count / target) * 100)}%`;
-            
-            // ⛓️ Pipeline View
-            const container = document.getElementById('pipeline_list');
-            container.innerHTML = '';
-            document.getElementById('next_slot_date').textContent = '--';
-            pipeline.forEach((item, idx) => {
-                const div = document.createElement('div');
-                div.className = 'flex justify-between items-center py-3 border-b border-[#133838]/50 last:border-none';
-                
-                let label = '';
-                if (idx === 0) label = 'Today';
-                else if (idx === 1) label = 'Next';
-                else if (idx === 2) label = 'Fill';
-                else label = 'Then Fill';
-                
-                const isFull = item.count >= item.target;
-                // Highlight the first non-full slot as the next priority
-                if (!document.getElementById('next_slot_date').textContent || document.getElementById('next_slot_date').textContent === '--') {
-                    if (!isFull) document.getElementById('next_slot_date').textContent = item.date;
-                }
-                div.innerHTML = `
-                    <div>
-                        <p class="text-[12px] font-bold ${isFull ? 'text-[#f0fdfa]' : 'text-[#94a3b8]'}">${label}</p>
-                        <p class="text-[9px] mono text-[#133838]">${item.date}</p>
-                    </div>
-                    <div class="text-right">
-                        <span class="text-[11px] mono font-black ${isFull ? 'text-[#10b981]' : 'text-[#14b8a6]'}">${item.count}/${item.target}</span>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-
-            // 🗺️ Visual Grids
-            renderGraph(history, config.target);
-            renderSparkline(monthly_stats);
-            renderMainChart(history.slice(-30));
-        }
-
-        function renderGraph(history, target) {
-            const graph = document.getElementById('contribution_graph');
-            graph.innerHTML = '';
-            const cells = history.slice(-371);
-            cells.forEach(day => {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                cell.title = `${day.date}: ${day.count} commits`;
-                const ratio = day.count / target;
-                let lvl = 0;
-                if (day.count > 0) {
-                    if (ratio >= 1) lvl = 4;
-                    else if (ratio >= 0.75) lvl = 3;
-                    else if (ratio >= 0.5) lvl = 2;
-                    else lvl = 1;
-                }
-                cell.classList.add(`lvl-${lvl}`);
-                
-                // Click listener for tile info
-                cell.onclick = () => {
-                    const infoBox = document.getElementById('tile_info');
-                    const infoDate = document.getElementById('tile_info_date');
-                    const infoCount = document.getElementById('tile_info_count');
-                    const infoColor = document.getElementById('tile_info_color');
-                    
-                    infoBox.classList.remove('hidden');
-                    infoDate.textContent = day.date;
-                    infoCount.textContent = day.count;
-                    infoColor.className = `w-4 h-4 rounded-sm lvl-${lvl}`;
-                };
-                
-                graph.appendChild(cell);
-            });
-        }
-
-        function renderSparkline(stats) {
-            const ctx = document.getElementById('efficiencySparkline').getContext('2d');
-            if (charts.spark) charts.spark.destroy();
-            charts.spark = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: stats.map(s => s.month),
-                    datasets: [{
-                        data: stats.map(s => s.count),
-                        borderColor: '#14b8a6',
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        fill: false,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { x: { display: false }, y: { display: false } }
-                }
-            });
-        }
-
-        function renderMainChart(history) {
-            const ctx = document.getElementById('velocityChart').getContext('2d');
-            if (charts.main) charts.main.destroy();
-            charts.main = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: history.map(h => h.date.split('-').slice(1).join('/')),
-                    datasets: [{
-                        data: history.map(h => h.count),
-                        backgroundColor: '#14b8a6',
-                        borderRadius: 4,
-                        barPercentage: 0.5
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { display: false, beginAtZero: true },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#133838', font: { family: 'JetBrains Mono', size: 10, weight: 600 } }
-                        }
+    function renderMainChart(history) {
+        const ctx = document.getElementById('velocityChart').getContext('2d');
+        if (charts.main) charts.main.destroy();
+        charts.main = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: history.map(h => h.date.split('-').slice(1).join('/')),
+                datasets: [{
+                    data: history.map(h => h.count),
+                    backgroundColor: '#14b8a6',
+                    borderRadius: 4,
+                    barPercentage: 0.5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { display: false, beginAtZero: true },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#133838', font: { family: 'JetBrains Mono', size: 10, weight: 600 } }
                     }
                 }
-            });
-        }
+            }
+        });
+    }
 
-        // Initial Load
-        fetchData();
-        // Polling loop
-        setInterval(fetchData, 10000);
-    </script>
+    // Initial Load
+    fetchData();
+    // Polling loop
+    setInterval(fetchData, 10000);
+</script>
 </body>
 </html>

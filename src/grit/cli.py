@@ -8,6 +8,7 @@ from grit.commands.commit import run_commit
 # Command Implementations
 from grit.commands.config import run_config_interactive
 from grit.commands.log import run_log
+from grit.commands.move import run_move
 from grit.commands.status import run_status
 from grit.commands.sync import run_sync
 from grit.dashboard import start_dashboard
@@ -251,6 +252,15 @@ def log(ctx: typer.Context):
 
 
 @app.command()
+def move():
+    """
+    Grit Move: Interactive history re-allocator.
+    Select a commit from your history and move it to the next available fill slot.
+    """
+    run_move(state)
+
+
+@app.command()
 def info():
     """
     Displays the comprehensive Grit Manual and Command Reference.
@@ -305,6 +315,10 @@ def info():
          []),
         ("log",
          "A beautifully enhanced, human-readable git log on jetpack rollerskates.", []),
+
+        ("move",
+         "Interactive history re-allocator. Select a commit to move to the next fill slot.",
+         []),
 
         ("dashboard",
          "Launch the high-fidelity web dashboard for visual intelligence. Alias: "

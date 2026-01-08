@@ -1,3 +1,8 @@
+import os
+import sys
+import tty
+import termios
+import select
 from rich.console import Console
 from rich.text import Text
 from rich.padding import Padding
@@ -62,3 +67,35 @@ def show_victory_animation():
             live.update(Padding(Text.from_markup(burst), (0, 2)), refresh=True)
             time.sleep(0.08)
         live.update(Text("")) # Clear after burst
+
+def get_key() -> str:
+    """
+    Reads a single keypress from the terminal for navigation (blocking).
+    Uses unbuffered input capture to ensure zero-latency response.
+    """
+    fd = sys.stdin.fileno()
+    if not os.isatty(fd):
+        return sys.stdin.read(1)
+
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        # Read the first byte
+        ch = os.read(fd, 1).decode(errors='ignore')
+        
+        if ch == '\x03': # Ctrl+C
+            raise KeyboardInterrupt
+        
+        # If it's an escape sequence, read the next bytes with a short timeout
+        if ch == '\x1b':
+            # Check if there's more data to read (the rest of the arrow key)
+            # We use select with a very short timeout to avoid blocking if it's just ESC
+            r, _, _ = select.select([fd], [], [], 0.05)
+            if r:
+                # Capture the rest (usually 2 more chars for arrows like [A)
+                # We read up to 2 bytes to complete the sequence
+                ch += os.read(fd, 2).decode(errors='ignore')
+                
+        return ch
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)

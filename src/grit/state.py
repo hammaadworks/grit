@@ -5,37 +5,41 @@ from typing import Optional
 DEFAULT_DB_DIR = Path.home() / ".config" / "grit"
 DEFAULT_DB_PATH = DEFAULT_DB_DIR / "state.db"
 
+
 class StateManager:
     """Manages local state using SQLite for the Grit CLI."""
 
     def __init__(self, db_path: str | Path = DEFAULT_DB_PATH):
         self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._init_db()
 
     def _init_db(self):
         """Initialize the database schema if it doesn't exist."""
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS config (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
+        with self._conn:
+            self._conn.execute(
+                '''
+                                CREATE TABLE IF NOT EXISTS config (
+                                    key TEXT PRIMARY KEY,
+                                    value TEXT
+                                )
+                            '''
                 )
-            ''')
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS commits (
-                    date TEXT PRIMARY KEY,
-                    count INTEGER
+            self._conn.execute(
+                '''
+                                CREATE TABLE IF NOT EXISTS commits (
+                                    date TEXT PRIMARY KEY,
+                                    count INTEGER
+                                )
+                            '''
                 )
-            ''')
-            conn.commit()
 
     def get_config(self, key: str) -> Optional[str]:
         """Retrieve a configuration value by key."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('SELECT value FROM config WHERE key = ?', (key,))
-            row = cursor.fetchone()
-            return row[0] if row else None
+        cursor = self._conn.execute('SELECT value FROM config WHERE key = ?', (key,))
+        row = cursor.fetchone()
+        return row[0] if row else None
 
     def get_synced_years(self) -> list[int]:
         """Returns a sorted list of years that have been fully synchronized."""
@@ -66,34 +70,36 @@ class StateManager:
     def update_sync_timestamp(self):
         """Updates the sync timestamp to the current time."""
         import time
+
         self.set_config("last_github_sync_timestamp", str(time.time()))
 
     def set_config(self, key: str, value: str):
         """Set or update a configuration key."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                INSERT INTO config (key, value)
-                VALUES (?, ?)
-                ON CONFLICT(key) DO UPDATE SET value=excluded.value
-            ''', (key, value))
-            conn.commit()
+        with self._conn:
+            self._conn.execute(
+                '''
+                                INSERT INTO config (key, value)
+                                VALUES (?, ?)
+                                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                            ''', (key, value)
+                )
 
     def get_commit_count(self, date: str) -> int:
         """Get the commit count for a specific YYYY-MM-DD date."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('SELECT count FROM commits WHERE date = ?', (date,))
-            row = cursor.fetchone()
-            return row[0] if row else 0
+        cursor = self._conn.execute('SELECT count FROM commits WHERE date = ?', (date,))
+        row = cursor.fetchone()
+        return row[0] if row else 0
 
     def set_commit_count(self, date: str, count: int):
         """Set or update the commit count for a specific date."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                INSERT INTO commits (date, count)
-                VALUES (?, ?)
-                ON CONFLICT(date) DO UPDATE SET count=excluded.count
-            ''', (date, count))
-            conn.commit()
+        with self._conn:
+            self._conn.execute(
+                '''
+                                INSERT INTO commits (date, count)
+                                VALUES (?, ?)
+                                ON CONFLICT(date) DO UPDATE SET count=excluded.count
+                            ''', (date, count)
+                )
 
     def increment_commit_count(self, date: str):
         """Atomically increments the commit count for a given date."""
@@ -106,46 +112,72 @@ class StateManager:
         if current_count > 0:
             self.set_commit_count(date, current_count - 1)
 
+    def get_history(self, days: int = 365) -> list[dict]:
+        """Fetch commit history for the last X days in a single efficient query."""
+        from datetime import datetime, timedelta
+
+        end_dt = datetime.now()
+        start_dt = end_dt - timedelta(days=days - 1)
+
+        start_date = start_dt.strftime("%Y-%m-%d")
+
+        # This query gets all records since start_date.
+        # Note: it doesn't fill gaps. We'll handle gaps in Python to keep it simple
+        # and fast.
+        cursor = self._conn.execute(
+            "SELECT date, count FROM commits WHERE date >= ? ORDER BY date ASC",
+            (start_date,)
+        )
+        data = {row[0]: row[1] for row in cursor.fetchall()}
+
+        history = []
+        for i in range(days):
+            d = (start_dt + timedelta(days=i)).strftime("%Y-%m-%d")
+            history.append(
+                {
+                    "date": d,
+                    "count": data.get(d, 0)
+                }
+            )
+        return history
+
     def get_monthly_commits(self, year_month: str) -> int:
         """Get the total commits for a YYYY-MM prefix."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "SELECT SUM(count) FROM commits WHERE date LIKE ?", 
-                (f"{year_month}-%",)
-            )
-            row = cursor.fetchone()
-            return row[0] if row[0] else 0
+        cursor = self._conn.execute(
+            "SELECT SUM(count) FROM commits WHERE date LIKE ?",
+            (f"{year_month}-%",)
+        )
+        row = cursor.fetchone()
+        return row[0] if row and row[0] else 0
 
     def get_yearly_commits(self, year: int) -> int:
         """Get the total commits for a specific YYYY year."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "SELECT SUM(count) FROM commits WHERE date LIKE ?", 
-                (f"{year}-%",)
-            )
-            row = cursor.fetchone()
-            return row[0] if row[0] else 0
+        cursor = self._conn.execute(
+            "SELECT SUM(count) FROM commits WHERE date LIKE ?",
+            (f"{year}-%",)
+        )
+        row = cursor.fetchone()
+        return row[0] if row and row[0] else 0
 
     def get_total_commits(self, start_date: str) -> int:
         """Get the total commits since a specific YYYY-MM-DD date."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "SELECT SUM(count) FROM commits WHERE date >= ?", 
-                (start_date,)
-            )
-            row = cursor.fetchone()
-            return row[0] if row[0] else 0
+        cursor = self._conn.execute(
+            "SELECT SUM(count) FROM commits WHERE date >= ?",
+            (start_date,)
+        )
+        row = cursor.fetchone()
+        return row[0] if row and row[0] else 0
 
     def get_effective_commits(self, start_date: str, target: int) -> int:
         """
-        Calculates 'Effective Commits' which is the sum of commits capped at the daily target.
+        Calculates 'Effective Commits' which is the sum of commits capped at the
+        daily target.
         This represents how much of the 'Green Wall' is actually built.
         """
-        with sqlite3.connect(self.db_path) as conn:
-            # We use MIN(count, ?) to cap each day's contribution to the progress
-            cursor = conn.execute(
-                "SELECT SUM(MIN(count, ?)) FROM commits WHERE date >= ?", 
-                (target, start_date)
-            )
-            row = cursor.fetchone()
-            return row[0] if row[0] else 0
+        # We use MIN(count, ?) to cap each day's contribution to the progress
+        cursor = self._conn.execute(
+            "SELECT SUM(MIN(count, ?)) FROM commits WHERE date >= ?",
+            (target, start_date)
+        )
+        row = cursor.fetchone()
+        return row[0] if row and row[0] else 0
