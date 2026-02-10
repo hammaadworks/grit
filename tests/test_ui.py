@@ -79,7 +79,12 @@ class TestUI(unittest.TestCase):
             # We need to set _title_pushed to True so reset_terminal_title actually writes to stdout
             grit.ui._title_pushed = True
             reset_terminal_title()
-            mock_write.assert_called_with("\033[23;0t")
+            # It should call pop sequence and then clear title sequence
+            from unittest.mock import call
+            mock_write.assert_has_calls([
+                call("\033[23;0t"),
+                call("\033]0;\007")
+            ])
 
     @patch('grit.ui.Live')
     @patch('random.random', return_value=0.9)

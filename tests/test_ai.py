@@ -1,7 +1,8 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from pydantic_ai.models.test import TestModel
-from grit.ai import generate_commit_message, CommitMessage
+from grit.ai import generate_commit_message
+from grit.constants import COMMIT_TYPES
 
 def test_generate_commit_message_success():
     """Verify that generate_commit_message handles successful model output correctly."""
@@ -13,18 +14,19 @@ def test_generate_commit_message_success():
     # Mock get_staged_files to avoid git dependency in this test
     with patch("grit.executor.get_staged_files", return_value=["file1.py", "file2.py"]):
         # Use a real CommitMessage instance as the model output
-        expected_msg = CommitMessage(
-            type="feat",
-            scope="core",
-            message="add new feature",
-            body=["detailed point 1", "detailed point 2"]
-        )
+        # With dynamic model, we can't import the class, but the mock can return an object
+        # with the required attributes.
+        mock_output = MagicMock()
+        mock_output.type = "feat"
+        mock_output.scope = "core"
+        mock_output.message = "add new feature"
+        mock_output.body = ["detailed point 1", "detailed point 2"]
         
         mock_result = MagicMock()
-        mock_result.output = expected_msg
+        mock_result.output = mock_output
         
         with patch("grit.ai.Agent.run_sync", return_value=mock_result):
-            res = generate_commit_message(diff, base_url, api_key, model_name)
+            res = generate_commit_message(diff, base_url, api_key, model_name, COMMIT_TYPES)
             
             assert res is not None
             assert "feat(core): add new feature" in res
@@ -36,12 +38,12 @@ def test_generate_commit_message_failure():
     diff = "test diff"
     
     with patch("grit.ai.Agent.run_sync", side_effect=Exception("API failure")):
-        res = generate_commit_message(diff, "url", "key", "model")
+        res = generate_commit_message(diff, "url", "key", "model", COMMIT_TYPES)
         assert res is None
 
 def test_generate_commit_message_empty_diff():
     """Verify that generate_commit_message returns None for empty diff."""
-    res = generate_commit_message("", "url", "key", "model")
+    res = generate_commit_message("", "url", "key", "model", COMMIT_TYPES)
     assert res is None
 
 def test_generate_commit_message_gemini_detection():
@@ -52,13 +54,14 @@ def test_generate_commit_message_gemini_detection():
     model_name = "gemini-1.5-flash"
 
     with patch("grit.executor.get_staged_files", return_value=["test.py"]):
+        mock_output = MagicMock()
+        mock_output.type = "fix"
+        mock_output.scope = "ui"
+        mock_output.message = "fix bug"
+        mock_output.body = ["impact analysis"]
+        
         mock_result = MagicMock()
-        mock_result.output = CommitMessage(
-            type="fix",
-            scope="ui",
-            message="fix bug",
-            body=["impact analysis"]
-        )
+        mock_result.output = mock_output
         
         # Patch the Agent class itself so we can check its initialization
         with patch("grit.ai.Agent") as MockAgent:
@@ -67,7 +70,7 @@ def test_generate_commit_message_gemini_detection():
             mock_agent_instance.run_sync.return_value = mock_result
             
             with patch("os.environ.update") as mock_env_update:
-                generate_commit_message(diff, base_url, api_key, model_name)
+                generate_commit_message(diff, base_url, api_key, model_name, COMMIT_TYPES)
                 
                 # Verify provider detection logic
                 MockAgent.assert_called()
