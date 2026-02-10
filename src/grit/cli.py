@@ -14,7 +14,6 @@ from grit.commands.dashboard import run_dashboard
 from grit.commands.spread import run_spread
 from grit.commands.undo import run_undo
 from grit.commands.ungrit import run_ungrit
-from grit.commands.ai_worker import run_ai_worker
 
 from grit.state import StateManager
 from grit.ui import (BRAND_COLOR, console, err_console, ERROR_COLOR,
@@ -69,7 +68,7 @@ def main(
     """
     setup_logger(verbose=logs)
 
-    interactive_cmds = ["config", "dashboard", "dash", "move", "_ai-internal"]
+    interactive_cmds = ["config", "dashboard", "dash", "move"]
     invoked = ctx.invoked_subcommand
 
     is_interactive = invoked in interactive_cmds
@@ -170,18 +169,12 @@ def dashboard(
 def commit(
         ctx: typer.Context,
         verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Detailed AI logs")] = False,
-        ai: Annotated[bool, typer.Option("--ai", "-a", help="Background AI generation")] = False,
+        ai: Annotated[bool, typer.Option("--ai", "-a", help="Display the AI system prompt and user rules instead of committing")] = False,
         logs: Annotated[bool, typer.Option("--logs", help="System-level logging")] = False
 ):
     """Intelligently allocates dates and preserved streaks via git commit."""
     if logs: setup_logger(verbose=True)
     run_commit(state, ctx, verbose=verbose, ai=ai)
-
-
-@app.command(hidden=True)
-def _ai_internal(diff_path: str, diff_hash: str, verbose: bool = False):
-    """Internal command for background AI generation."""
-    run_ai_worker(diff_path, diff_hash, verbose)
 
 
 @app.command(

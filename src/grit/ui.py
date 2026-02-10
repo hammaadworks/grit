@@ -80,12 +80,15 @@ def reset_terminal_title():
     """
     Resets the terminal title by popping from the stack.
     Relies on terminal stacking support (xterm/iTerm/etc) to restore the previous title.
+    Also sends a clear-title sequence as a fallback.
     """
     global _title_pushed
     if sys.stdout.isatty() and not _suppress_title_reset:
         if _title_pushed:
             # Pop from stack (xterm extension) - restores previous title
             sys.stdout.write("\033[23;0t")
+            # Clear title as a safe fallback for non-stacking terminals
+            sys.stdout.write("\033]0;\007")
             sys.stdout.flush()
             _title_pushed = False
 
@@ -99,7 +102,6 @@ def print_banner():
     Renders a premium minimalist banner to provide branding consistency.
     This banner is printed at the start of most high-level user commands.
     """
-    set_terminal_title("Grit")
     console.print(get_banner_layout())
 
 
@@ -204,7 +206,7 @@ def run_text_input(title: str, initial_text: str = "", help_text: str = "",
                 # Re-render after state change
                 render()
     finally:
-        set_terminal_title("Grit")
+        pass
 
     return text.strip()
 
@@ -258,7 +260,7 @@ def run_selection_menu(title: str, options: list[str], selected_idx: int = 0,
                 
                 render()
     finally:
-        set_terminal_title("Grit")
+        pass
 
 
 def show_victory_animation():

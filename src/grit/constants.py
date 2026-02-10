@@ -37,6 +37,7 @@ ACCENT_COLOR = "bright_cyan"  # Secondary highlights (standardized to brand colo
 # AI & CommitScribe
 # =========================
 COMMIT_TYPES = ["feat", "fix", "docs", "style", "refactor", "test", "chore"]
+DEFAULT_COMMIT_TYPES_STR = ",".join(COMMIT_TYPES)
 
 # Limits for AI processing
 DIFF_TRUNCATION_LIMIT = 8000
