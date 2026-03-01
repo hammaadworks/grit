@@ -27,6 +27,30 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             
             stats = self._get_stats()
             self.wfile.write(json.dumps(stats).encode())
+        elif self.path == '/api/db/tables':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            import sqlite3
+            with sqlite3.connect(self.state.db_path) as conn:
+                cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = [row[0] for row in cursor.fetchall()]
+                self.wfile.write(json.dumps(tables).encode())
+        elif self.path.startswith('/api/db/data'):
+            from urllib.parse import urlparse, parse_qs
+            query = parse_qs(urlparse(self.path).query)
+            table = query.get('table', [None])[0]
+            if table in ['config', 'commits']:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                import sqlite3
+                with sqlite3.connect(self.state.db_path) as conn:
+                    cursor = conn.execute(f"SELECT * FROM {table}")
+                    rows = cursor.fetchall()
+                    self.wfile.write(json.dumps(rows).encode())
+            else:
+                self.send_error(400, "Invalid table")
         elif self.path == '/' or self.path == '/dashboard':
             # Serve the dashboard.html file
             html_path = Path(__file__).parent / "dashboard.html"
@@ -73,6 +97,55 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     if username and username != "Not configured" and start_date:
                         sync_historical_data(self.state, str(username), str(start_date))
                 
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success"}).encode())
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+        elif self.path == '/api/db/edit':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                data = json.loads(post_data)
+                table = data.get('table')
+                row = data.get('row') # This should be a list/dict of values
+                
+                if table == 'config':
+                    self.state.set_config(row[0], row[1])
+                elif table == 'commits':
+                    self.state.set_commit_count(row[0], int(row[1]))
+                else:
+                    raise Exception("Invalid table")
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success"}).encode())
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+        elif self.path == '/api/db/delete':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                data = json.loads(post_data)
+                table = data.get('table')
+                pk = data.get('pk') # Primary key value
+                
+                import sqlite3
+                with sqlite3.connect(self.state.db_path) as conn:
+                    if table == 'config':
+                        conn.execute("DELETE FROM config WHERE key = ?", (pk,))
+                    elif table == 'commits':
+                        conn.execute("DELETE FROM commits WHERE date = ?", (pk,))
+                    else:
+                        raise Exception("Invalid table")
+                    conn.commit()
+
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()

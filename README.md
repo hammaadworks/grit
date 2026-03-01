@@ -24,6 +24,8 @@ uv tool install grit
 pipx install grit
 ```
 
+Alternatively, you can download the latest source code or wheels from [GitHub Releases](https://github.com/hammaadworks/grit/releases).
+
 ## 🛠️ Quick Start
 
 1. **Configure Grit:**
@@ -52,4 +54,4 @@ pipx install grit
 ## 📖 Documentation & Marketing
 
 Looking to share this tool or understand exactly how it is built under the hood? 
-Check out our comprehensive [Documentation & Landing Page](https://github.com/your-org/grit) (or run `uv run mkdocs serve` locally).
+Check out our comprehensive [Documentation & Landing Page](https://github.com/hammaadworks/grit) (or visit [grit.hammaadworks.com](https://grit.hammaadworks.com)).
