@@ -26,7 +26,7 @@ git config --global diff.mnemonicprefix false
 ## 🏗️ Technical FAQs
 
 ### Does Grit rewrite my Git history?
-**No.** Grit only modifies the `GIT_AUTHOR_DATE` environment variable during the commit process. It does **not** perform `rebase`, `filter-branch`, or any other history-altering operations. Your `GIT_COMMITTER_DATE` remains the actual time you ran the command, preserving the audit trail of when the work was truly performed.
+**No.** Grit only modifies the `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` environment variables during the commit process. It does **not** perform `rebase`, `filter-branch`, or any other history-altering operations. This ensures that both the author and committer dates are aligned for a consistent contribution graph.
 
 ### Is Grit safe to use on professional repositories?
 Yes. Because Grit is a transparent wrapper, it is compatible with all Git features (hooks, GPG signing, LFS). However, we recommend checking with your team's lead before using it on shared corporate repositories, as some teams use contribution graphs to track velocity.

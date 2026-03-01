@@ -25,7 +25,7 @@ This document outlines the testing strategy for the `grit` CLI tool. All test ca
 **1.2. Timestamp Generation (`executor.py`)**
 *   **`test_timestamp_formatting`**:
     *   *Setup*: Input date `2024-03-22`. Current system time `14:30:00`.
-    *   *Action*: Format for `GIT_AUTHOR_DATE`.
+    *   *Action*: Format for `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`.
     *   *Expected*: Outputs valid Git timestamp format (e.g., `2024-03-22 14:30:00 +0000` or equivalent ISO8601 string compatible with Git).
 
 **1.3. Database Operations (`state.py`)**

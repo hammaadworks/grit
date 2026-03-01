@@ -721,10 +721,10 @@ def commit(ctx: typer.Context):
                         grid.add_row(Text.from_markup(f"      ↑ [dim](more files above)[/dim]", style=BRAND_COLOR))
 
                     # File selection table
-                    table = Table(box=None, padding=(0, 1), show_header=False, expand=True)
-                    table.add_column("Cursor", width=3, justify="center")
-                    table.add_column("Checkbox", width=5, justify="center")
-                    table.add_column("Path")
+                    table = Table(box=None, padding=(0, 1), show_header=False, expand=False)
+                    table.add_column("Cursor", width=2, justify="left")
+                    table.add_column("Checkbox", width=3, justify="left")
+                    table.add_column("Path", justify="left")
 
                     for i in range(scroll_offset, min(scroll_offset + visible_count, len(items))):
                         item = items[i]

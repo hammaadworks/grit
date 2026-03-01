@@ -3,7 +3,7 @@
 ## 1. Overview & Objective
 **Grit** is a terminal-based CLI wrapper for `git commit`. Its primary objective is to intelligently distribute commits across a timeline to help users consistently hit a specific `daily_target` of commits, starting from a mutable `start_date`.
 
-It achieves this by dynamically calculating and injecting the `GIT_AUTHOR_DATE` environment variable into the vanilla `git commit` process. `GIT_COMMITTER_DATE` is left untouched to preserve the repository's true chronological history while still painting the GitHub contribution graph.
+It achieves this by dynamically calculating and injecting both `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` environment variables into the vanilla `git commit` process to ensure a consistent backdated history.
 
 ## 2. Core Behavior & Algorithm
 When a user runs `grit commit <args>`:

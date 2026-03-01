@@ -5,7 +5,7 @@ from grit.state import StateManager
 
 def get_git_timestamp(date_str: str) -> str:
     """
-    Generates a valid GIT_AUTHOR_DATE timestamp.
+    Generates a valid Git ISO-8601 timestamp for injection.
     Combines the target YYYY-MM-DD with the current system time and timezone.
     Internal calculation is done in UTC to prevent drift during travel.
     """
@@ -84,7 +84,8 @@ def has_staged_files() -> bool:
 
 def execute_git_commit(args: list[str], target_date: str, state: StateManager) -> bool:
     """
-    Executes the vanilla `git commit` command with the injected GIT_AUTHOR_DATE.
+    Executes the vanilla `git commit` command with the injected GIT_AUTHOR_DATE 
+    and GIT_COMMITTER_DATE to ensure a consistent, uniform backdated history.
     If the commit succeeds AND the HEAD hash changed, increments the local state.
     """
     timestamp = get_git_timestamp(target_date)
@@ -95,8 +96,8 @@ def execute_git_commit(args: list[str], target_date: str, state: StateManager) -
     # Copy existing environment to ensure things like SSH agents/GPG keys still work
     env = os.environ.copy()
     env["GIT_AUTHOR_DATE"] = timestamp
+    env["GIT_COMMITTER_DATE"] = timestamp
     
-    # We explicitly do not set GIT_COMMITTER_DATE to preserve real chronological history
     result = subprocess.run(["git", "commit"] + args, env=env)
     
     if result.returncode == 0:

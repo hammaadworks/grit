@@ -71,7 +71,7 @@ Use it exactly like standard Git to bypass the wizard:
     ```
 
 !!! success "How it works"
-    Grit automatically generates a valid Git timestamp in your local timezone, injects it into `GIT_AUTHOR_DATE`, and safely executes the commit. If the commit fails (e.g. pre-commit hook failure) or the HEAD hash doesn't change, Grit will **not** increment your daily counter.
+    Grit automatically generates a valid Git timestamp in your local timezone, injects it into both `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`, and safely executes the commit. If the commit fails (e.g. pre-commit hook failure) or the HEAD hash doesn't change, Grit will **not** increment your daily counter.
 
 ---
 

@@ -6,15 +6,15 @@ hide:
 
 # 🧱 Grit
 
-**The intelligent `git commit` wrapper that keeps your GitHub graph perfectly consistent—without destroying your true repository history.**
+**The intelligent `git commit` wrapper that keeps your GitHub graph perfectly consistent with a unified backdated history.**
 
 ![Anime Typing Hacker Meme](https://media.tenor.com/81Bta-H1NqIAAAAC/anime-typing.gif)
 
 <div class="grid cards" markdown>
 -   **No More Ghost Towns**
     Set a daily commit target. Grit mathematically distributes your commits across a timeline.
--   **Zero History Rewriting**
-    Grit only modifies `GIT_AUTHOR_DATE`. Your `GIT_COMMITTER_DATE` (the true history) remains untouched.
+-   **Consistent History**
+    Grit modifies both `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` to ensure a consistent backdated history on GitHub.
 -   **Self-Healing**
     Bypassed Grit by accident? `grit sync` merges your local Git log and public GitHub profile to prevent overwriting past activity.
 </div>
@@ -92,6 +92,14 @@ grit commit -m "Initial commit"
 -   :material-help-circle: **[FAQ & Troubleshooting ➔](faq.md)**
     
     Learn about dashboards, headless CI/CD setups, and uninstallation.
+
+</div>
+
+/CD setups, and uninstallation.
+
+</div>
+
+ps, and uninstallation.
 
 </div>
 

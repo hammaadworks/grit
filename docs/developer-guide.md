@@ -77,8 +77,8 @@ Where does the code live?
 | `state.py` | The atomic SQLite wrapper for configuration and state. |
 | `allocator.py` | The core SQL CTE logic for finding the next commit date. |
 | `sync.py` | Parses local `git log` and scrapes the GitHub public graph. |
-| `executor.py` | Generates the timezone-aware `GIT_AUTHOR_DATE` and wraps `subprocess.run`. |
-
+| `executor.py` | Generates the timezone-aware `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`, and wraps `subprocess.run`. |
+| | |
 ---
 
 ## 📜 4. Core Rules

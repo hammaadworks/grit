@@ -18,7 +18,7 @@ March 24, 2026
   - Added explicit guides for local development execution (`uv run grit`) and global deployment (`uv tool install`).
 
 ## Key Decisions Made
-1.  **Wrapper Paradigm:** Grit safely passes all CLI arguments directly to git using `subprocess.run` while injecting `GIT_AUTHOR_DATE`. It intercepts but does not modify `git commit --amend`.
+1.  **Wrapper Paradigm:** Grit safely passes all CLI arguments directly to git using `subprocess.run` while injecting both `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`. It intercepts but does not modify `git commit --amend`.
 2.  **Date Resolution Logic:** To avoid SQLite `ORDER BY` hangs, we limit the recursive CTE to `+365` days forward.
 3.  **Testing Strategy:** Test-driven development from the bottom up ensuring state mutations mock the `subprocess` accurately.
 4.  **GitHub Scraping:** Relies exclusively on `tool-tip` DOM parsing inside GitHub's public HTML grid.

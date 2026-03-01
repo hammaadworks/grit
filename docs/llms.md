@@ -6,7 +6,7 @@
 ## 1. Project Identity
 Grit is a Python CLI wrapper for `git commit`.
 - **Core Value:** Maintains a consistent GitHub contribution graph by distributing real work across a timeline.
-- **Paradigm:** Intercepts `git commit`, calculates the optimal `GIT_AUTHOR_DATE`, and executes the native binary.
+- **Paradigm:** Intercepts `git commit`, calculates the optimal `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`, and executes the native binary.
 - **Stack:** Python (>=3.10), Typer (CLI), Rich (UI), SQLite (State), uv (Package Manager).
 
 ## 2. Technical Architecture
@@ -52,7 +52,7 @@ Instead of Python loops, we use a single SQL query to find the first available d
 
 ## 4. Troubleshooting & Edge Cases
 - **`--amend`:** Grit intercepts and warns users that amends do not count as new commits.
-- **Timezones:** `executor.py` generates local system timestamps.
+- **Timezones:** `executor.py` generates local system timestamps for both date variables.
 - **Scraper Lag:** GitHub's public graph can lag by ~10 minutes.
 - **Infinite Loops:** The date allocator is bounded to 1 year forward.
 
@@ -62,3 +62,4 @@ Instead of Python loops, we use a single SQL query to find the first available d
 - `grit status`: Progress dashboard + future forecast.
 - `grit sync`: Multi-source state alignment.
 - `grit ungrit`: Secure teardown.
+
