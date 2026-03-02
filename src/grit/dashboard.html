@@ -400,7 +400,7 @@
             document.getElementById('input_username').value = config.username || '';
             document.getElementById('input_target').value = config.target || 1;
             document.getElementById('input_start_date').value = config.start_date || '';
-            document.getElementById('input_fill_strategy').value = config.fill_strategy || 'today';
+            document.getElementById('input_fill_strategy').value = config.fill_strategy || 'start_date';
             document.getElementById('input_ai_url').value = config.ai_base_url || '';
             document.getElementById('input_ai_key').value = config.ai_api_key || '';
             document.getElementById('input_ai_model').value = config.ai_model || '';
@@ -463,7 +463,7 @@
             document.getElementById('today_count').textContent = metrics.today_count;
             document.getElementById('daily_target').textContent = config.target || 1;
             document.getElementById('yearly_done').textContent = metrics.yearly_done;
-            document.getElementById('current_strategy').textContent = (config.fill_strategy || 'today').toUpperCase() + '_FIRST';
+            document.getElementById('current_strategy').textContent = (config.fill_strategy || 'start_date').toUpperCase() + '_FIRST';
             document.getElementById('last_sync_time').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
 
             // 🟩 Optimization Bar

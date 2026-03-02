@@ -66,6 +66,14 @@ def get_unstaged_files() -> list[str]:
     except Exception:
         return []
 
+def get_staged_files() -> list[str]:
+    """Returns a list of files currently in the staging area."""
+    try:
+        result = subprocess.run(["git", "diff", "--name-only", "--cached"], capture_output=True, text=True)
+        return [f for f in result.stdout.strip().split('\n') if f]
+    except Exception:
+        return []
+
 def get_staged_diff() -> str:
     """Returns the raw diff of currently staged files for AI context."""
     try:
@@ -114,3 +122,93 @@ def execute_git_commit(args: list[str], target_date: str, state: StateManager) -
             return False
     
     return False
+
+def execute_grit_spread(commit_hashes: list[str], hash_to_date: dict[str, str], state: StateManager) -> bool:
+    """
+    Redistributes a range of commits across the timeline.
+    Uses a temporary branch and cherry-picking to rewrite history safely.
+    """
+    if not commit_hashes:
+        return False
+        
+    # Safety Check: Is the working directory clean?
+    status_res = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+    if status_res.stdout.strip():
+        print("Your working directory has unstaged changes. Please commit or stash them before spreading.")
+        return False
+
+    original_branch = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True).stdout.strip()
+    is_detached = not original_branch
+    if is_detached:
+        # Detached HEAD? Let's use the current hash
+        original_branch = get_head_hash()
+
+    # Base is the parent of the first commit in the range
+    first_commit = commit_hashes[0]
+    base_res = subprocess.run(["git", "rev-parse", f"{first_commit}^1"], capture_output=True, text=True)
+    
+    if base_res.returncode != 0:
+        # If no parent exists, it's a root commit. We can't easily rebase/cherry-pick it onto 'nothing'
+        # without --orphan, but for simplicity we'll assume the range starts AFTER the root commit
+        # or we'll handle it by checking out the root commit and amending it.
+        # Actually, if it's the root, we can use the root itself as the starting point.
+        is_root = True
+        base_commit = first_commit
+    else:
+        is_root = False
+        base_commit = base_res.stdout.strip()
+    
+    temp_branch = f"grit-spread-{int(datetime.now().timestamp())}"
+    
+    try:
+        if is_root:
+            # If the first commit is root, we checkout it and amend it first.
+            subprocess.run(["git", "checkout", "-b", temp_branch, base_commit], check=True, capture_output=True)
+            target_date = hash_to_date[first_commit]
+            timestamp = get_git_timestamp(target_date)
+            env = os.environ.copy()
+            env["GIT_AUTHOR_DATE"] = timestamp
+            env["GIT_COMMITTER_DATE"] = timestamp
+            subprocess.run(["git", "commit", "--amend", "--no-edit"], env=env, check=True, capture_output=True)
+            # Remaining hashes to cherry-pick
+            remaining_hashes = commit_hashes[1:]
+        else:
+            # 1. Create temporary branch at base
+            subprocess.run(["git", "checkout", "-b", temp_branch, base_commit], check=True, capture_output=True)
+            remaining_hashes = commit_hashes
+        
+        # 2. Cherry-pick and rewrite each remaining commit
+        for commit_hash in remaining_hashes:
+            target_date = hash_to_date[commit_hash]
+            timestamp = get_git_timestamp(target_date)
+            
+            cp_res = subprocess.run(["git", "cherry-pick", commit_hash], capture_output=True)
+            if cp_res.returncode != 0:
+                print(f"Conflict detected while cherry-picking {commit_hash}. Aborting spread.")
+                subprocess.run(["git", "cherry-pick", "--abort"])
+                raise Exception("Cherry-pick conflict")
+            
+            # Amend the commit with the new date
+            env = os.environ.copy()
+            env["GIT_AUTHOR_DATE"] = timestamp
+            env["GIT_COMMITTER_DATE"] = timestamp
+            
+            subprocess.run(["git", "commit", "--amend", "--no-edit"], env=env, check=True, capture_output=True)
+            
+        # 3. Success! Move back and reset
+        subprocess.run(["git", "checkout", original_branch], check=True, capture_output=True)
+        subprocess.run(["git", "reset", "--hard", temp_branch], check=True, capture_output=True)
+        
+        # 4. Update state only after successful rebase
+        for target_date in hash_to_date.values():
+            state.increment_commit_count(target_date)
+            
+        return True
+        
+    except Exception as e:
+        # Attempt to return to original state
+        subprocess.run(["git", "checkout", original_branch], capture_output=True)
+        return False
+    finally:
+        # Cleanup
+        subprocess.run(["git", "branch", "-D", temp_branch], capture_output=True)

@@ -18,7 +18,7 @@ from rich.live import Live
 from grit import __version__
 from grit.state import StateManager
 from grit.allocator import DateAllocator
-from grit.executor import execute_git_commit, get_unstaged_files, get_staged_diff, has_staged_files, is_commit_pushed, get_head_author_date
+from grit.executor import execute_git_commit, get_unstaged_files, get_staged_diff, has_staged_files, is_commit_pushed, get_head_author_date, execute_grit_spread, get_staged_files
 from grit.ai import generate_commit_message
 from grit.sync import fetch_github_contributions, get_local_git_stats, merge_sync_data, sync_historical_data
 from grit.updater import is_update_available, get_upgrade_command
@@ -181,7 +181,7 @@ def config(
     options = [
         {"id": "target", "title": "Daily Commit Target *", "desc": "Maximum commits to allocate per calendar day.", "key": "daily_target", "default": "1"},
         {"id": "start", "title": "Timeline Start Date *", "desc": "The historical boundary for backfilling (YYYY-MM-DD).", "key": "start_date", "default": datetime.now().strftime("%Y-%m-%d")},
-        {"id": "fill", "title": "Allocation Strategy *", "desc": "Where to fill gaps from (today or start_date).", "key": "fill_strategy", "default": "today"},
+        {"id": "fill", "title": "Allocation Strategy *", "desc": "Where to fill gaps from (today or start_date).", "key": "fill_strategy", "default": "start_date"},
         {"id": "user", "title": "GitHub Identity *", "desc": "Your public username for contribution graph integration.", "key": "github_username", "default": "Not configured"},
         {"id": "ai_url", "title": "AI: Base URL", "desc": "LLM API endpoint (e.g. http://localhost:11434/v1 for Ollama, or Anthropic/Groq).", "key": "ai_base_url", "default": "Not configured"},
         {"id": "ai_key", "title": "AI: API Key", "desc": "Your API token for the LLM provider (leave blank for local models).", "key": "ai_api_key", "default": ""},
@@ -462,6 +462,8 @@ def status():
     
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
+    next_date = allocator.get_next_date()
+    
     for i, alloc in enumerate(allocations):
         date_str = alloc['date']
         is_today = date_str == today
@@ -469,6 +471,8 @@ def status():
         day_count, day_target = alloc['count'], alloc['target']
         
         is_full = day_count >= day_target
+        is_next_fill = date_str == next_date
+        
         if is_today:
             status_icon = "◆" if not is_full else "✔"
             status_style = SUCCESS_COLOR if is_full else BRAND_COLOR
@@ -476,9 +480,26 @@ def status():
             status_icon = "✔" if is_full else "◇"
             status_style = SUCCESS_COLOR if is_full else "dim"
         
-        phase = "today" if is_today else ("yesterday" if is_yesterday else ("next fill" if i == 2 else "then fill"))
+        if is_next_fill:
+            phase = "NEXT FILL"
+            row_style = f"on {BRAND_COLOR} bold white"
+        elif is_today:
+            phase = "today"
+            row_style = ""
+        elif is_yesterday:
+            phase = "yesterday"
+            row_style = ""
+        else:
+            phase = "then fill"
+            row_style = ""
             
-        alloc_table.add_row(date_str, phase, Text(status_icon, style=status_style), f"{day_count}/{day_target}")
+        alloc_table.add_row(
+            date_str, 
+            phase, 
+            Text(status_icon, style=status_style), 
+            f"{day_count}/{day_target}",
+            style=row_style
+        )
     
     # Use BRAND_COLOR for the border if target not met, SUCCESS_COLOR if met
     border = SUCCESS_COLOR if goal_met else BRAND_COLOR
@@ -551,6 +572,9 @@ def info():
         ]),
         ("status", "View your Intelligence Dashboard, commit capacity, and future pipeline.", []),
         ("sync", "Manually trigger a three-way merge between Local Git, Remote GitHub, and Grit State.", []),
+        ("spread", "Redistribute a range of commits across the timeline to fill history gaps.", [
+            ("[commit-range]", "The range of commits to redistribute (e.g. HEAD~5..HEAD).")
+        ]),
         ("undo", "The 'Quantum Undo'. Safely regress the last commit and restore your streak count.", []),
         ("ungrit", "Securely decommission Grit and delete all local configuration and state.", [
             ("-f, --force", "Bypass the interactive confirmation prompt.")
@@ -592,6 +616,81 @@ def info():
         d_text.append(f"• {title}: ", style=f"bold {WARN_COLOR}")
         d_text.append(detail, style="dim")
         console.print(Padding(d_text, (0, 4, 1, 4)))
+
+@app.command()
+def spread(
+    commit_range: Annotated[str, typer.Argument(help="Commit range to spread (e.g. HEAD~5..HEAD or HEAD~3)")]
+):
+    """
+    Grit Spread: Redistributes a range of commits across the timeline.
+    Intelligently finds gaps in your history and rewrites the commits to fill them.
+    """
+    if not is_config_valid():
+        err_console.print(f"[{WARN_COLOR}]⚠ Configuration is incomplete. Run `grit config`.[/{WARN_COLOR}]")
+        raise typer.Exit(1)
+
+    # Normalize range: if user just says HEAD~3, we mean HEAD~3..HEAD
+    actual_range = commit_range
+    if ".." not in commit_range:
+        actual_range = f"{commit_range}..HEAD"
+
+    # 1. Get the list of commits in reverse chronological order (oldest first)
+    res = subprocess.run(["git", "rev-list", "--reverse", actual_range], capture_output=True, text=True)
+    if res.returncode != 0:
+        err_console.print(f"[{ERROR_COLOR}]✗ Invalid commit range: {commit_range}[/{ERROR_COLOR}]")
+        raise typer.Exit(1)
+        
+    commit_hashes = res.stdout.strip().splitlines()
+    if not commit_hashes:
+        console.print(f"[{WARN_COLOR}]![/{WARN_COLOR}] No commits found in range {actual_range}.")
+        return
+
+    console.print(Padding(Text("GRIT SPREAD INITIATED", style=f"bold {ACCENT_COLOR}"), (1, 2, 0, 2)))
+    console.print(Padding(f"Analyzing [bold]{len(commit_hashes)}[/bold] commits for redistribution...", (0, 2)))
+
+    # 2. Allocate dates for each commit (simulating state)
+    allocator = DateAllocator(state)
+    hash_to_date = {}
+    mock_counts = {}
+    
+    with console.status("[dim]Calculating optimal timeline...[/dim]", spinner="dots12"):
+        for h in commit_hashes:
+            target_date = allocator.get_next_date(current_counts=mock_counts)
+            hash_to_date[h] = target_date
+            # Update mock counts for subsequent allocations in this batch
+            mock_counts[target_date] = mock_counts.get(target_date, state.get_commit_count(target_date)) + 1
+
+    # 3. Summarize the plan
+    date_summary = {}
+    for d in hash_to_date.values():
+        date_summary[d] = date_summary.get(d, 0) + 1
+    
+    summary_table = Table(box=None, padding=(0, 2))
+    summary_table.add_column("Target Date", style="dim")
+    summary_table.add_column("Commits", justify="right")
+    
+    for d, c in sorted(date_summary.items()):
+        summary_table.add_row(d, str(c))
+        
+    console.print(Padding("Proposed Redistribution:", (1, 2, 0, 2), style="bold"))
+    console.print(Padding(summary_table, (0, 2, 1, 2)))
+
+    if is_commit_pushed():
+        console.print(Padding(Text("WARNING: SOME COMMITS ARE ALREADY PUSHED", style=f"bold {ERROR_COLOR}"), (0, 2)))
+        console.print(Padding("This operation will rewrite history. You will need to `git push -f`.", (0, 2), style="dim"))
+
+    if not typer.confirm("Apply redistribution? This will rewrite local history.", default=True):
+        console.print("[dim]Aborted.[/dim]")
+        return
+
+    # 4. Execute the rewrite
+    with console.status(f"[bold {BRAND_COLOR}]Rewriting history...[/bold {BRAND_COLOR}]", spinner="dots12"):
+        success = execute_grit_spread(commit_hashes, hash_to_date, state)
+        
+    if success:
+        console.print(f"[{SUCCESS_COLOR}]✓ Successfully redistributed {len(commit_hashes)} commits across the timeline.[/{SUCCESS_COLOR}]")
+    else:
+        err_console.print(f"[{ERROR_COLOR}]✗ Failed to redistribute commits. Your local branch has been restored.[/{ERROR_COLOR}]")
 
 @app.command()
 def undo():
@@ -676,122 +775,169 @@ def commit(ctx: typer.Context):
     # INTERACTIVE DEVX WIZARD (Zero arguments)
     if not args:
         # Step A: File Picker (Interactive `git add`)
-        if not has_staged_files():
-            files = get_unstaged_files()
-            if not files:
-                console.print(f"[{WARN_COLOR}]No changes to commit.[/{WARN_COLOR}]")
-                raise typer.Exit(0)
-                
-            # Build an intelligent tree structure for the file picker
-            dir_groups = {}
-            for f in sorted(files):
-                parts = f.rsplit('/', 1)
-                d = parts[0] + '/' if len(parts) == 2 else ''
-                if d not in dir_groups: dir_groups[d] = []
-                dir_groups[d].append(f)
-                
-            items = [{"type": "all", "label": "(Select All)", "files": files, "depth": 0}]
-            for d in sorted(dir_groups.keys()):
-                if d != '':
-                    items.append({"type": "dir", "label": f"[bold]{d}[/bold]", "files": dir_groups[d], "depth": 1})
-                    for f in sorted(dir_groups[d]):
-                        items.append({"type": "file", "label": f.split('/')[-1], "file": f, "depth": 2})
-            if '' in dir_groups:
-                for f in sorted(dir_groups['']):
-                    items.append({"type": "file", "label": f, "file": f, "depth": 1})
-                    
-            selected = set()
-            idx = 0
-            visible_count = 12
-            scroll_offset = 0
+        files = get_unstaged_files()
+        staged_files = get_staged_files()
+        
+        if not files:
+            console.print(f"[{WARN_COLOR}]No changes to commit.[/{WARN_COLOR}]")
+            raise typer.Exit(0)
             
-            with Live(auto_refresh=False, console=console, screen=False) as live:
-                while True:
-                    # Sync scroll offset
-                    if idx < scroll_offset:
-                        scroll_offset = idx
-                    elif idx >= scroll_offset + visible_count:
-                        scroll_offset = idx - visible_count + 1
-
-                    grid = Table.grid(expand=True)
-                    grid.add_row(Text("Select files to stage (Space to toggle, Enter to confirm, Q to abort):", style=f"bold {ACCENT_COLOR}"))
-                    grid.add_row("") # Spacer
-                    
-                    if scroll_offset > 0:
-                        grid.add_row(Text.from_markup(f"      ↑ [dim](more files above)[/dim]", style=BRAND_COLOR))
-
-                    # File selection table
-                    table = Table(box=None, padding=(0, 1), show_header=False, expand=False)
-                    table.add_column("Cursor", width=2, justify="left")
-                    table.add_column("Checkbox", width=3, justify="left")
-                    table.add_column("Path", justify="left")
-
-                    for i in range(scroll_offset, min(scroll_offset + visible_count, len(items))):
-                        item = items[i]
-                        is_cur = i == idx
-                        
-                        if item["type"] == "file":
-                            is_sel = item["file"] in selected
-                            is_partial = False
-                        else:
-                            fs = item["files"]
-                            is_sel = len(fs) > 0 and all(f in selected for f in fs)
-                            is_partial = len(fs) > 0 and any(f in selected for f in fs) and not is_sel
-                            
-                        cursor = "▶" if is_cur else ""
-                        indent = "  " * item["depth"]
-                        
-                        # High-fidelity checkbox icons
-                        if is_sel:
-                            box = f"[{SUCCESS_COLOR}]✔[/]"
-                            style = SUCCESS_COLOR
-                        elif is_partial:
-                            box = f"[{WARN_COLOR}]━[/]"
-                            style = SUCCESS_COLOR # Keep text success colored
-                        else:
-                            box = "[dim]○[/dim]"
-                            style = "dim" if not is_cur else "white"
-                            
-                        table.add_row(
-                            Text(cursor, style=f"bold {BRAND_COLOR}"),
-                            Text.from_markup(box),
-                            Text.from_markup(f"{indent}{item['label']}", style=style)
-                        )
-                    
-                    grid.add_row(table)
-                    
-                    if scroll_offset + visible_count < len(items):
-                         grid.add_row(Text.from_markup(f"      ↓ [dim](more files below)[/dim]", style=BRAND_COLOR))
-                        
-                    live.update(Padding(grid, (1, 2)), refresh=True)
-                    key = get_key()
-                    
-                    if key == '\x1b[A': idx = (idx - 1) % len(items)
-                    elif key == '\x1b[B': idx = (idx + 1) % len(items)
-                    elif key == ' ': 
-                        item = items[idx]
-                        if item["type"] == "file":
-                            f = item["file"]
-                            if f in selected: selected.remove(f)
-                            else: selected.add(f)
-                        else:
-                            fs = item["files"]
-                            if all(f in selected for f in fs):
-                                for f in fs: selected.discard(f)
-                            else:
-                                for f in fs: selected.add(f)
-                    elif key.lower() == 'q':
-                        console.print("[dim]Aborted.[/dim]")
-                        raise typer.Exit(0)
-                    elif key in ('\r', '\n'): 
-                        break
+        # Build an intelligent tree structure for the file picker
+        dir_groups = {}
+        for f in sorted(files):
+            parts = f.rsplit('/', 1)
+            d = parts[0] + '/' if len(parts) == 2 else ''
+            if d not in dir_groups: dir_groups[d] = []
+            dir_groups[d].append(f)
             
-            if not selected:
-                console.print("[dim]Aborted. No files selected.[/dim]")
-                raise typer.Exit(0)
+        items = [{"type": "all", "label": "(Select All)", "files": files, "depth": 0}]
+        for d in sorted(dir_groups.keys()):
+            if d != '':
+                items.append({"type": "dir", "label": f"[bold]{d}[/bold]", "path": d, "files": dir_groups[d], "depth": 1, "collapsed": False})
+                for f in sorted(dir_groups[d]):
+                    items.append({"type": "file", "label": f.split('/')[-1], "file": f, "depth": 2, "parent": d})
+        if '' in dir_groups:
+            for f in sorted(dir_groups['']):
+                items.append({"type": "file", "label": f, "file": f, "depth": 1})
                 
-            subprocess.run(["git", "add"] + list(selected))
-            console.print(f"[{SUCCESS_COLOR}]✓ Staged {len(selected)} files.[/{SUCCESS_COLOR}]")
+        selected = set(staged_files)
+        idx = 0
+        visible_count = 12
+        scroll_offset = 0
+        
+        with Live(auto_refresh=False, console=console, screen=False) as live:
+            while True:
+                # Calculate visible items based on collapsed state
+                visible_items = []
+                collapsed_paths = {item["path"] for item in items if item["type"] == "dir" and item.get("collapsed")}
+                for item in items:
+                    if item["type"] == "file" and item.get("parent") in collapsed_paths:
+                        continue
+                    visible_items.append(item)
+
+                # Clamp index to visible bounds
+                if idx >= len(visible_items):
+                    idx = len(visible_items) - 1
+                if idx < 0:
+                    idx = 0
+
+                # Sync scroll offset
+                if idx < scroll_offset:
+                    scroll_offset = idx
+                elif idx >= scroll_offset + visible_count:
+                    scroll_offset = idx - visible_count + 1
+
+                grid = Table.grid(expand=True)
+                grid.add_row(Text("Select files to stage (Space: toggle, Tab/←/→: fold, Enter: confirm, Q: abort):", style=f"bold {ACCENT_COLOR}"))
+                grid.add_row("") # Spacer
+                
+                if scroll_offset > 0:
+                    grid.add_row(Text.from_markup(f"      ↑ [dim](more files above)[/dim]", style=BRAND_COLOR))
+
+                # File selection table
+                table = Table(box=None, padding=(0, 1), show_header=False, expand=False)
+                table.add_column("Cursor", width=2, justify="left")
+                table.add_column("Checkbox", width=3, justify="left")
+                table.add_column("Path", justify="left")
+
+                for i in range(scroll_offset, min(scroll_offset + visible_count, len(visible_items))):
+                    item = visible_items[i]
+                    is_cur = i == idx
+                    
+                    if item["type"] == "file":
+                        is_sel = item["file"] in selected
+                        is_partial = False
+                        icon = ""
+                    elif item["type"] == "dir":
+                        fs = item["files"]
+                        is_sel = len(fs) > 0 and all(f in selected for f in fs)
+                        is_partial = len(fs) > 0 and any(f in selected for f in fs) and not is_sel
+                        icon = "📁 " if item.get("collapsed") else "📂 "
+                    else: # type == "all"
+                        fs = item["files"]
+                        is_sel = len(fs) > 0 and all(f in selected for f in fs)
+                        is_partial = len(fs) > 0 and any(f in selected for f in fs) and not is_sel
+                        icon = ""
+                        
+                    cursor = "▶" if is_cur else ""
+                    indent = "  " * item["depth"]
+                    
+                    # High-fidelity checkbox icons
+                    if is_sel:
+                        box = f"[{SUCCESS_COLOR}]✔[/]"
+                        style = SUCCESS_COLOR
+                    elif is_partial:
+                        box = f"[{WARN_COLOR}]━[/]"
+                        style = SUCCESS_COLOR # Keep text success colored
+                    else:
+                        box = "[dim]○[/dim]"
+                        style = "dim" if not is_cur else "white"
+                        
+                    label = item['label']
+                    if item["type"] == "dir":
+                        label = f"{icon}{label}"
+                        if item.get("collapsed"):
+                             label += f" [dim]({len(item['files'])} hidden)[/dim]"
+
+                    table.add_row(
+                        Text(cursor, style=f"bold {BRAND_COLOR}"),
+                        Text.from_markup(box),
+                        Text.from_markup(f"{indent}{label}", style=style)
+                    )
+                
+                grid.add_row(table)
+                
+                if scroll_offset + visible_count < len(visible_items):
+                     grid.add_row(Text.from_markup(f"      ↓ [dim](more files below)[/dim]", style=BRAND_COLOR))
+                    
+                live.update(Padding(grid, (1, 2)), refresh=True)
+                key = get_key()
+                
+                if key == '\x1b[A': idx = (idx - 1) % len(visible_items)
+                elif key == '\x1b[B': idx = (idx + 1) % len(visible_items)
+                elif key == '\x1b[C': # Right (Expand)
+                    item = visible_items[idx]
+                    if item["type"] == "dir":
+                        item["collapsed"] = False
+                elif key == '\x1b[D': # Left (Collapse)
+                    item = visible_items[idx]
+                    if item["type"] == "dir":
+                        item["collapsed"] = True
+                elif key == '\t': # Tab (Toggle fold)
+                    item = visible_items[idx]
+                    if item["type"] == "dir":
+                        item["collapsed"] = not item.get("collapsed", False)
+                elif key == ' ': 
+                    item = visible_items[idx]
+                    if item["type"] == "file":
+                        f = item["file"]
+                        if f in selected: selected.remove(f)
+                        else: selected.add(f)
+                    else:
+                        fs = item["files"]
+                        if all(f in selected for f in fs):
+                            for f in fs: selected.discard(f)
+                        else:
+                            for f in fs: selected.add(f)
+                elif key.lower() == 'q':
+                    console.print("[dim]Aborted.[/dim]")
+                    raise typer.Exit(0)
+                elif key in ('\r', '\n'): 
+                    break
+        
+        if not selected:
+            console.print("[dim]Aborted. No files selected.[/dim]")
+            raise typer.Exit(0)
+            
+        # Synchronize the staging area with the user's final selection
+        # First, unstage everything that was originally staged but now deselected
+        to_unstage = [f for f in staged_files if f not in selected]
+        if to_unstage:
+            subprocess.run(["git", "reset"] + to_unstage, capture_output=True)
+            
+        # Then, stage everything that is currently selected
+        subprocess.run(["git", "add"] + list(selected))
+        console.print(f"[{SUCCESS_COLOR}]✓ Staging area synchronized ({len(selected)} files selected).[/{SUCCESS_COLOR}]")
         
         # Step B: Semantic & AI Wizard
         ai_key = state.get_config("ai_api_key")

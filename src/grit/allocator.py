@@ -17,19 +17,15 @@ class DateAllocator:
     def __init__(self, state_manager: StateManager):
         self.state = state_manager
 
-    def get_next_date(self) -> str:
+    def get_next_date(self, current_counts: dict[str, int] = None) -> str:
         """
-        Determines the next date to allocate a commit to based on the configured strategy:
-        1. If today's count < daily_target, return today.
-        2. If today is full, fill gaps based on 'fill_strategy' (today or start_date).
-        3. If all past dates are full, schedule in the future (earliest available).
-        
-        Returns:
-            str: The target date in YYYY-MM-DD format.
+        Determines the next date to allocate a commit to based on the configured strategy.
+        If current_counts is provided, it uses those values instead of querying the DB
+        for those specific dates (useful for batch simulations like 'grit spread').
         """
         target_str = self.state.get_config("daily_target")
         start_date = self.state.get_config("start_date")
-        fill_strategy = self.state.get_config("fill_strategy") or "today"
+        fill_strategy = self.state.get_config("fill_strategy") or "start_date"
         
         def is_placeholder(val):
             return not val or val in ["Not configured", "None", ""]
@@ -40,10 +36,11 @@ class DateAllocator:
         daily_target = int(target_str)
         today = get_today()
         
-        # Determine filling direction for past holes
-        # 'today' means DESC (closest to today first)
-        # 'start_date' means ASC (closest to start date first)
         order_dir = "DESC" if fill_strategy == "today" else "ASC"
+        
+        # If we have current_counts, we can't easily do it in a single SQL query 
+        # without complex temp tables. For small batches, we'll just fetch the top 
+        # candidates and filter in Python.
         
         query = f"""
         WITH RECURSIVE dates(d) AS (
@@ -51,44 +48,34 @@ class DateAllocator:
             UNION ALL
             SELECT date(d, '+1 day')
             FROM dates
-            WHERE d < date(?, '+365 days') -- Bounded search space
+            WHERE d < date(?, '+365 days')
         )
-        SELECT d.d
+        SELECT d.d, COALESCE(c.count, 0)
         FROM dates d
         LEFT JOIN commits c ON d.d = c.date
-        WHERE COALESCE(c.count, 0) < ?
         ORDER BY 
             CASE 
-                WHEN d.d = ? THEN 0 -- Today is the highest priority
-                WHEN d.d < ? THEN 1 -- Past dates are next (backfilling)
-                ELSE 2              -- Future dates are the spillover
+                WHEN d.d = ? THEN 0 
+                WHEN d.d < ? THEN 1 
+                ELSE 2 
             END ASC,
             CASE 
                 WHEN d.d < ? THEN d.d 
             END {order_dir},
-            d.d ASC   -- Fill the EARLIEST future hole first
-        LIMIT 1;
+            d.d ASC
+        LIMIT 100; -- Fetch enough to find a gap
         """
         
         with sqlite3.connect(self.state.db_path) as conn:
-            # We pass 'today' multiple times for the priority CASE logic
-            cursor = conn.execute(query, (start_date, today, daily_target, today, today, today))
-            row = cursor.fetchone()
-            if row:
-                target_date = row[0]
-                target_year = int(target_date.split('-')[0])
-                
-                # Verified Boundary Rule:
-                # We refuse to allocate to a year that hasn't been synced.
-                # This prevents "Dark Zone" collisions where Grit assumes 0 commits
-                # because it hasn't checked GitHub/Git logs for that year yet.
-                if not self.state.is_year_synced(target_year):
-                    # We'll allow the CLI to handle the JIT Sync, but for the allocator,
-                    # we must signal that this date is 'Unverified'.
-                    pass 
-                
-                return target_date
-                
+            cursor = conn.execute(query, (start_date, today, today, today, today))
+            rows = cursor.fetchall()
+            
+            for date_str, db_count in rows:
+                # Use current_counts override if available
+                count = current_counts.get(date_str, db_count) if current_counts else db_count
+                if count < daily_target:
+                    return date_str
+                    
         return today
 
     def get_status_allocations(self) -> list[dict]:
@@ -114,7 +101,7 @@ class DateAllocator:
         daily_target = int(target_str)
         today = get_today()
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        fill_strategy = self.state.get_config("fill_strategy") or "today"
+        fill_strategy = self.state.get_config("fill_strategy") or "start_date"
         order_dir = "DESC" if fill_strategy == "today" else "ASC"
         
         # We start with the guaranteed "Context Rows" (Yesterday and Today).

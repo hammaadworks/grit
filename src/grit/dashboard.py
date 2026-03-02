@@ -105,7 +105,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         target_raw = self.state.get_config("daily_target")
         start_date = self.state.get_config("start_date")
         username = self.state.get_config("github_username")
-        fill_strategy = self.state.get_config("fill_strategy") or "today"
+        fill_strategy = self.state.get_config("fill_strategy") or "start_date"
         
         def is_placeholder(val):
             return not val or val in ["Not configured", "None", ""]
