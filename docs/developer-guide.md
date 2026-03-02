@@ -24,7 +24,7 @@ We use [`uv`](https://docs.astral.sh/uv/), an extremely fast Python package mana
 Once `uv` is installed, clone and sync:
 
 ```bash
-git clone https://github.com/your-org/grit.git
+git clone https://github.com/hammaadworks/grit.git
 cd grit
 uv sync
 ```
@@ -67,7 +67,20 @@ uv run pytest tests/ -v
 
 ---
 
-## 🏗️ 3. Project Map
+## 🧪 4. Internal Testing & QA
+Before any release, we perform internal testing to ensure the "packaged" app works perfectly.
+
+### How to Test Internally:
+1.  **Developers**: Run `uv run pytest` for unit/integration tests.
+2.  **QA/Testers**: 
+    *   Build the package: `uv build`.
+    *   Install the generated wheel: `uv tool install ./dist/*.whl --force`.
+    *   Perform "Smoke Testing" by running the installed `grit` command in real-world scenarios.
+3.  **Sharing**: The `.whl` file in the `dist/` folder can be shared directly with the testing team for installation.
+
+---
+
+## 🏗️ 5. Project Map
 
 Where does the code live?
 

@@ -1,0 +1,12 @@
+graph TD
+    A[Start: grit sync] --> B{Check Local Log}
+    B -->|Parse| C[Local Commit Dates]
+    A --> D{Check Public GitHub}
+    D -->|Scrape| E[Remote Graph]
+    C --> F{Merge Data}
+    E --> F
+    F -->|MAX Logic| G[(SQLite DB)]
+    G --> H[End: Re-Synced]
+    
+    style F fill:#14b8a6,stroke:#fff,stroke-width:2px,color:#fff
+    style G fill:#000,stroke:#14b8a6,stroke-width:2px,color:#fff

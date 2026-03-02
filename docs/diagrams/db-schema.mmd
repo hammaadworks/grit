@@ -1,0 +1,10 @@
+erDiagram
+    CONFIG {
+        string key PK "daily_target, start_date, github_username, fill_strategy, etc."
+        string value
+    }
+    COMMITS {
+        string date PK
+        int count
+    }
+    CONFIG ||--o{ COMMITS : "defines target"

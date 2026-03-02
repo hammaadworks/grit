@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant User
+    participant CLI
+    participant SQL as SQLite DB
+    participant Git
+    
+    User->>CLI: grit commit -m "..."
+    CLI->>SQL: Find first open date (Recursive CTE)
+    SQL-->>CLI: 2024-03-24
+    CLI->>Git: Injects AUTHOR & COMMITTER DATE
+    Git-->>CLI: Exit Code 0
+    CLI->>SQL: count++ for 2024-03-24

@@ -13,6 +13,8 @@ The schema is heavily normalized:
 * `config` table: Key-value pairs for `daily_target`, `start_date`, etc.
 * `commits` table: Primary key `date` (YYYY-MM-DD), and `count` (integer).
 
+[View Database Schema Diagram](diagrams/db-schema.mmd)
+
 ## 2. The O(1) Allocator
 
 When a user runs `grit commit`, the CLI needs to know exactly what date to assign the commit to. 
@@ -48,10 +50,14 @@ To support "Streak-First" allocation (filling recent gaps before future ones), w
 
 This is achieved via a multi-level `ORDER BY` with `CASE` statements, ensuring the database engine always yields the most "streak-preserving" date in $O(1)$ time.
 
+[View Allocator Sequence Diagram](diagrams/allocator.mmd)
+
 ## 3. The Sync Engine
 Grit is "dumb" by design—it only increments its internal database when `subprocess.run(['git', 'commit'])` returns an exit code of `0`. 
 
 If a user bypasses Grit, desynchronization occurs. The `sync.py` module is the self-healing mechanism.
+
+[View Sync Engine Diagram](diagrams/sync-engine.mmd)
 
 **Local Sync:**
 It runs `git log --format="%ad" --date=short` and parses the output to calculate how many commits exist on each day locally.
