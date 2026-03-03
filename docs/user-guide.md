@@ -53,7 +53,8 @@ Simply type `grit commit` with no arguments to launch the Interactive Wizard.
 ```bash
 $ grit commit
 ```
-1.  **File Picker:** Use your arrow keys and Spacebar to select which files to stage.
+1.  **File Picker:** Use your arrow keys to navigate and **Spacebar** to select which files to stage.
+    *   **Folding:** Use **Tab** or **Left/Right Arrow keys** to collapse and expand directories. This is extremely helpful for navigating deep project structures like `node_modules` or complex skill paths.
 2.  **Semantic Auto-Commit:** Choose a conventional commit type, or select `✨ Auto-generate (AI)` to let Grit read your diff and write the perfect message for you.
 3.  **Smart Push:** Grit will ask if you want to push immediately. If the remote rejects it, Grit will gracefully offer to `git pull --rebase` for you.
 
@@ -75,7 +76,25 @@ Use it exactly like standard Git to bypass the wizard:
 
 ---
 
-## 4. Quantum Undo (`grit undo`)
+## 4. History Redistributor (`grit spread`)
+
+Finished a massive feature and made 10 commits in one night? Use `grit spread` to intelligently redistribute them across your historical gaps.
+
+```bash
+$ grit spread HEAD~5
+```
+
+- **Analysis:** Grit scans the specified range of commits.
+- **Allocation:** It finds the next available slots in your history based on your `daily_target` and `fill_strategy`.
+- **Rewrite:** Grit performs an automated history rewrite using a safe "Shadow Branch" strategy.
+- **Atomic Sync:** Your local database is updated only if the rewrite succeeds.
+
+!!! warning "Rewriting History"
+    Like `git rebase`, this command rewrites commit hashes. If you have already pushed these commits, you will need to `git push --force`.
+
+---
+
+## 5. Quantum Undo (`grit undo`)
 
 Made a mistake? Committed to the wrong day? Use the panic button:
 
@@ -90,7 +109,7 @@ This command safely performs a `git reset --soft HEAD~1` (keeping your files sta
 
 ---
 
-## 5. Checking Status
+## 6. Checking Status
 
 Want to know how many commits you have left for the day, or view your overall journey progress?
 

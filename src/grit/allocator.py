@@ -80,11 +80,10 @@ class DateAllocator:
 
     def get_status_allocations(self) -> list[dict]:
         """
-        Returns a specific 4-row timeline for the status dashboard:
-        1. Yesterday: To show historical context.
-        2. Today: The current primary focus.
-        3. Next Available: The first date where a new commit will land (following the streak logic).
-        4. Next-Next Available: The subsequent spillover target.
+        Returns a specific 3-row timeline for the status dashboard:
+        1. Today: The current primary focus.
+        2. Next Available: The first date where a new commit will land (following the streak logic).
+        3. Next-Next Available: The subsequent spillover target.
         
         Returns:
             list[dict]: A list of objects containing 'date', 'count', and 'target'.
@@ -100,12 +99,11 @@ class DateAllocator:
             
         daily_target = int(target_str)
         today = get_today()
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
         fill_strategy = self.state.get_config("fill_strategy") or "start_date"
         order_dir = "DESC" if fill_strategy == "today" else "ASC"
         
-        # We start with the guaranteed "Context Rows" (Yesterday and Today).
-        res_dates = [today, yesterday]
+        # We start with the guaranteed "Context Rows" (Today).
+        res_dates = [today]
         
         # Use the same priority logic as get_next_date to find the next few available slots.
         query = f"""
@@ -142,14 +140,14 @@ class DateAllocator:
             for nd in next_dates:
                 if nd not in res_dates:
                     res_dates.append(nd)
-                if len(res_dates) >= 4:
+                if len(res_dates) >= 3:
                     break
             
             # Emergency fallback: If search space is exhausted, simply increment days.
-            if len(res_dates) < 4:
+            if len(res_dates) < 3:
                 last_date_str = res_dates[-1] if res_dates else today
                 last_date = datetime.strptime(last_date_str, "%Y-%m-%d")
-                while len(res_dates) < 4:
+                while len(res_dates) < 3:
                     last_date += timedelta(days=1)
                     res_dates.append(last_date.strftime("%Y-%m-%d"))
         

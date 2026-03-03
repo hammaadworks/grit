@@ -8,10 +8,12 @@ It achieves this by dynamically calculating and injecting both `GIT_AUTHOR_DATE`
 ## 2. Core Behavior & Algorithm
 When a user runs `grit commit <args>`:
 1.  **State Check:** Grit queries its local database for the commit count of "today".
-2.  **Date Allocation (Streak-First):**
+2.  **Date Allocation:**
     *   **Priority 1 (Live):** If today's count < `daily_target`, assign the commit to today.
-    *   **Priority 2 (Healing):** If today is full, scan **backwards** from today to the `start_date`. Find the *most recent* date where count < `daily_target`. This ensures gaps closest to today are filled first to maintain a continuous contribution streak.
-    *   **Priority 3 (Future):** If all past dates are full, assign the commit to the earliest future date (e.g., tomorrow).
+    *   **Priority 2 (Healing/Backfilling):** If today is full, scan for gaps between `today` and `start_date`. The direction depends on the `fill_strategy`:
+        *   `start_date` (Default): Fills gaps closest to the start date first (chronological).
+        *   `today`: Fills gaps closest to today first (reverse chronological).
+    *   **Priority 3 (Future):** If all past dates are full, assign the commit to the earliest future date.
 3.  **Timestamp Generation:** The injected date uses the target `YYYY-MM-DD` combined with the current system time (`HH:MM:SS`) and timezone.
 4.  **Execution:** Run `git commit <args>` with the injected `GIT_AUTHOR_DATE`.
 5.  **State Update:** If the `git commit` command succeeds (exit code 0), increment the commit count for that date in the local database.
@@ -21,12 +23,15 @@ Built using Python, Typer, and Rich for a premium, interactive terminal experien
 
 *   **`grit`** (or `grit config`): 
     *   Clears the terminal and opens a premium, interactive "Control Center" TUI.
-    *   Allows configuration of `daily_target`, `start_date`, `github_username`, and AI LLM configurations (`ai_base_url`, `ai_api_key`, `ai_model`).
+    *   Allows configuration of `daily_target`, `start_date`, `github_username`, `fill_strategy`, and AI LLM configurations.
     *   *Cold Start Magic:* Upon save, immediately triggers a background fetch of the user's public GitHub contribution graph.
-*   **`grit info`** (also `man grit` via alias): 
+*   **`grit info`**: 
     *   Renders a highly readable command reference and disclaimers in the terminal.
 *   **`grit status`**: 
-    *   Displays a sophisticated dashboard showing today's progress, a visually mapped timeline pipeline (Yesterday, Today, Next, Then), and alerts for version updates.
+    *   Displays a sophisticated dashboard showing today's progress and a visually mapped pipeline. The `NEXT FILL` slot is highlighted with a dedicated color and label.
+*   **`grit spread <range>`**: 
+    *   The "History Redistributor". Takes a range of commits (e.g., `HEAD~5`) and spreads them across the timeline gaps automatically.
+    *   Uses a safe "Shadow Branch" strategy to rewrite history and only applies changes if successful.
 *   **`grit sync`**: 
     *   The self-healing command. Merges Local Git and Remote GitHub state into the database using `MAX(current, new)`.
 *   **`grit commit <args>`**: 
@@ -46,7 +51,7 @@ To ensure high performance, zero-dependency data handling, and concurrency safet
 
 ### Database Schema
 *   **`config` table:** `(key TEXT PRIMARY KEY, value TEXT)`
-    *   Keys: `start_date`, `daily_target`, `github_username`.
+    *   Keys: `start_date`, `daily_target`, `github_username`, `fill_strategy`.
 *   **`commits` table:** `(date TEXT PRIMARY KEY, count INTEGER)`
     *   Stores `YYYY-MM-DD` and the integer count. Only stores dates with >0 commits.
 
@@ -63,7 +68,9 @@ ORDER BY
         WHEN d.d < '{today}' THEN 1 -- Priority 2
         ELSE 2                      -- Priority 3
     END ASC,
-    CASE WHEN d.d < '{today}' THEN d.d END DESC, -- Backfill latest gaps first
+    CASE 
+        WHEN d.d < '{today}' THEN d.d 
+    END {order_dir}, -- ASC for start_date-first, DESC for today-first
     d.d ASC -- Forward fill future gaps
 LIMIT 1;
 ```

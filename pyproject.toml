@@ -1,0 +1,28 @@
+[project]
+name = "grit"
+version = "0.1.0"
+description = "Grit is a terminal-based CLI wrapper for git commit to intelligently distribute commits."
+readme = "README.md"
+authors = [
+    { name = "hammaadworks", email = "hammaadworks@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "httpx>=0.28.1",
+    "rich>=14.3.3",
+    "typer>=0.24.1",
+]
+
+[project.scripts]
+grit = "grit.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-mock>=3.15.1",
+]

@@ -460,14 +460,9 @@ def status():
     alloc_table.add_column("Status", justify="center", width=8)
     alloc_table.add_column("Load", justify="right")
     
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-
-    next_date = allocator.get_next_date()
-    
     for i, alloc in enumerate(allocations):
         date_str = alloc['date']
         is_today = date_str == today
-        is_yesterday = date_str == yesterday
         day_count, day_target = alloc['count'], alloc['target']
         
         is_full = day_count >= day_target
@@ -485,9 +480,6 @@ def status():
             row_style = f"on {BRAND_COLOR} bold white"
         elif is_today:
             phase = "today"
-            row_style = ""
-        elif is_yesterday:
-            phase = "yesterday"
             row_style = ""
         else:
             phase = "then fill"
@@ -782,23 +774,64 @@ def commit(ctx: typer.Context):
             console.print(f"[{WARN_COLOR}]No changes to commit.[/{WARN_COLOR}]")
             raise typer.Exit(0)
             
-        # Build an intelligent tree structure for the file picker
-        dir_groups = {}
+        # 1. Build nested dict tree
+        root_tree = {}
         for f in sorted(files):
-            parts = f.rsplit('/', 1)
-            d = parts[0] + '/' if len(parts) == 2 else ''
-            if d not in dir_groups: dir_groups[d] = []
-            dir_groups[d].append(f)
-            
+            parts = f.split('/')
+            curr = root_tree
+            for i, part in enumerate(parts):
+                if i == len(parts) - 1: # File
+                    curr[part] = f
+                else: # Dir
+                    if part not in curr:
+                        curr[part] = {}
+                    curr = curr[part]
+        
+        # 2. Flatten into items list with hierarchical data
         items = [{"type": "all", "label": "(Select All)", "files": files, "depth": 0}]
-        for d in sorted(dir_groups.keys()):
-            if d != '':
-                items.append({"type": "dir", "label": f"[bold]{d}[/bold]", "path": d, "files": dir_groups[d], "depth": 1, "collapsed": False})
-                for f in sorted(dir_groups[d]):
-                    items.append({"type": "file", "label": f.split('/')[-1], "file": f, "depth": 2, "parent": d})
-        if '' in dir_groups:
-            for f in sorted(dir_groups['']):
-                items.append({"type": "file", "label": f, "file": f, "depth": 1})
+        
+        def flatten_tree(curr_dict, depth, parent_path=""):
+            res = []
+            # Sort so dirs come before files, then alphabetically
+            sorted_names = sorted(curr_dict.keys(), key=lambda n: (not isinstance(curr_dict[n], dict), n))
+            
+            for name in sorted_names:
+                val = curr_dict[name]
+                # Ensure parent_path ends with / for startswith matching
+                path = f"{parent_path}{name}/"
+                
+                if isinstance(val, dict):
+                    # Directory: Recursively find all nested files for bulk toggle
+                    def get_all_nested_files(d):
+                        fs = []
+                        for k, v in d.items():
+                            if isinstance(v, dict): fs.extend(get_all_nested_files(v))
+                            else: fs.append(v)
+                        return fs
+                    
+                    dir_files = get_all_nested_files(val)
+                    res.append({
+                        "type": "dir", 
+                        "label": f"[bold]{name}/[/bold]", 
+                        "path": path, 
+                        "files": dir_files, 
+                        "depth": depth, 
+                        "collapsed": False,
+                        "parent": parent_path
+                    })
+                    res.extend(flatten_tree(val, depth + 1, path))
+                else:
+                    # File
+                    res.append({
+                        "type": "file", 
+                        "label": name, 
+                        "file": val, 
+                        "depth": depth, 
+                        "parent": parent_path
+                    })
+            return res
+
+        items.extend(flatten_tree(root_tree, 1))
                 
         selected = set(staged_files)
         idx = 0
@@ -807,13 +840,25 @@ def commit(ctx: typer.Context):
         
         with Live(auto_refresh=False, console=console, screen=False) as live:
             while True:
-                # Calculate visible items based on collapsed state
+                # Calculate visible items based on collapsed state (prefix-based inheritance)
                 visible_items = []
-                collapsed_paths = {item["path"] for item in items if item["type"] == "dir" and item.get("collapsed")}
+                collapsed_prefixes = {item["path"] for item in items if item["type"] == "dir" and item.get("collapsed")}
+                
                 for item in items:
-                    if item["type"] == "file" and item.get("parent") in collapsed_paths:
+                    if item["type"] == "all":
+                        visible_items.append(item)
                         continue
-                    visible_items.append(item)
+                        
+                    # An item is hidden if any of its parent path prefixes are collapsed
+                    is_hidden = False
+                    item_parent = item.get("parent", "")
+                    for prefix in collapsed_prefixes:
+                        if item_parent.startswith(prefix):
+                            is_hidden = True
+                            break
+                    
+                    if not is_hidden:
+                        visible_items.append(item)
 
                 # Clamp index to visible bounds
                 if idx >= len(visible_items):
