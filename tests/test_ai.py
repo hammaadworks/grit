@@ -81,3 +81,45 @@ def test_generate_commit_message_gemini_detection():
                 called_env = mock_env_update.call_args[0][0]
                 assert called_env["GEMINI_API_KEY"] == "test-gemini-key"
                 assert called_env["GOOGLE_API_KEY"] == "test-gemini-key"
+
+def test_generate_commit_message_no_body():
+    """Verify that generate_commit_message handles empty body correctly (no extra newlines)."""
+    diff = "test diff"
+    from grit.constants import COMMIT_TYPES
+    
+    with patch("grit.executor.get_staged_files", return_value=["file1.py"]):
+        mock_output = MagicMock()
+        mock_output.type = "feat"
+        mock_output.scope = "core"
+        mock_output.message = "add new feature"
+        mock_output.body = [] # Empty body
+        
+        mock_result = MagicMock()
+        mock_result.output = mock_output
+        
+        with patch("grit.ai.Agent.run_sync", return_value=mock_result):
+            res = generate_commit_message(diff, "url", "key", "model", COMMIT_TYPES)
+            
+            assert res == "feat(core): add new feature"
+
+def test_generate_commit_message_instructions():
+    """Verify that the instructions passed to the Agent contain the caveman-commit rules."""
+    diff = "test diff"
+    from grit.constants import COMMIT_TYPES
+    
+    with patch("grit.executor.get_staged_files", return_value=["test.py"]):
+        with patch("grit.ai.Agent") as MockAgent:
+            mock_agent_instance = MockAgent.return_value
+            mock_agent_instance.run_sync.return_value = MagicMock()
+            
+            generate_commit_message(diff, "url", "key", "model", COMMIT_TYPES)
+            
+            MockAgent.assert_called()
+            args, kwargs = MockAgent.call_args
+            instructions = kwargs.get("instructions", "")
+            
+            assert "terse and exact" in instructions
+            assert "No fluff" in instructions
+            assert "Why over what" in instructions
+            assert "PROHIBITED" in instructions
+            assert "≤50 chars" in instructions

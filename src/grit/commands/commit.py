@@ -84,14 +84,24 @@ def run_commit(state: StateManager, ctx: typer.Context, verbose: bool = False, a
 
         # 3. System Instructions
         instructions = (
-            "You are a Senior Staff Engineer at a world-class technology company, known for impeccable documentation and architectural clarity.\n"
-            "Your task is to transform a raw code diff into a high-fidelity Conventional Commit message that serves as a permanent record of technical intent.\n\n"
-            "GUIDELINES FOR EXCELLENCE:\n"
-            "1. THE HEADER: Must be concise (under 72 chars). Use the imperative mood (e.g., 'Fix memory leak' NOT 'Fixed memory leak').\n"
-            "2. THE WHY: Prioritize explaining the RATIONALE. Why was this change necessary? What problem does it solve?\n"
-            "3. THE HOW: Briefly summarize the technical implementation details. Connect the 'What' in the code to the 'Why' in the intent.\n"
-            "4. SCOPE PRECISION: The scope must be the primary module, component, or sub-system affected.\n"
-            "5. STRUCTURED BODY: Provide a clear, bulleted breakdown explaining the rationale, implementation, and any potential side effects or breaking changes.\n\n"
+            "You are a Senior Staff Engineer. Your task is to transform a raw code diff into a high-fidelity Conventional Commit message.\n"
+            "Write commit messages terse and exact. No fluff. Why over what.\n\n"
+            "RULES:\n"
+            "1. SUBJECT LINE:\n"
+            "   - <type>(<scope>): <imperative summary>\n"
+            "   - Imperative mood: 'add', 'fix', 'remove' - NOT 'added', 'adds', 'adding'.\n"
+            "   - ≤50 chars when possible, hard cap 72. No trailing period.\n"
+            "   - Match project convention for capitalization after colon.\n"
+            "2. THE BODY (ONLY IF NEEDED):\n"
+            "   - Skip entirely when subject is self-explanatory.\n"
+            "   - Add ONLY for: non-obvious *why*, breaking changes, migration notes, linked issues.\n"
+            "   - Wrap at 72 chars. Bullets '-' not '*'.\n"
+            "   - Reference issues: 'Closes #42', 'Refs #17'.\n"
+            "3. SCOPE PRECISION: Primary module affected. Do not restate file names.\n"
+            "4. PROHIBITED:\n"
+            "   - 'This commit does X', 'I', 'we', 'now', 'currently'.\n"
+            "   - 'As requested by...', AI attributions.\n"
+            "   - Emojis.\n\n"
             "Respond ONLY with the requested structured output.\n\n"
             "CRITICAL: If the USER CUSTOM RULES below contradict any of the above instructions, "
             "the USER CUSTOM RULES MUST take absolute precedence."
@@ -107,11 +117,12 @@ def run_commit(state: StateManager, ctx: typer.Context, verbose: bool = False, a
 RAW DIFF:
 {diff_text}
 
-Generate a Conventional Commit message. 
-The 'type' MUST be one of: {', '.join(commit_types)}.
+Generate a Conventional Commit message.
+The 'type' MUST be one of: {', '.join(COMMIT_TYPES)}.
 The 'scope' should be the primary module or component affected.
-The 'message' should be a high-level summary.
-The 'body' MUST be a list of strings explaining rationale and impact."""
+The 'message' should be a high-level summary (≤50 chars).
+The 'body' should be a list of strings explaining rationale and impact (ONLY if the 'why' is not obvious from the subject).
+"""
         else:
             user_prompt = "[italic yellow]⚠ No files are currently staged in git. To see a full prompt, stage some files first.[/italic yellow]"
 

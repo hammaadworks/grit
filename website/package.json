@@ -1,6 +1,6 @@
 {
   "name": "grit",
-  "version": "0.0.2",
+  "version": "0.7.89",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

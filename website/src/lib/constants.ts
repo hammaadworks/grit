@@ -5,7 +5,7 @@
 
 export const SITE_CONFIG = {
   name: "Grit",
-  version: "0.0.2",
+  version: "0.7.89",
   repo_url: "https://github.com/hammaadworks/grit",
   releases_url: "https://github.com/hammaadworks/grit/releases",
   pypi_url: "https://pypi.org/project/grit/",
@@ -13,7 +13,7 @@ export const SITE_CONFIG = {
     user: "/docs/user-guide",
     developer: "/docs/developer-guide",
     llms: "https://github.com/hammaadworks/grit/blob/main/docs/llms.md",
-  }
+  },
 } as const;
 
 export const COMMANDS = {
