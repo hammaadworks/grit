@@ -4,8 +4,8 @@
 The ultimate TUI + AI wrapper for Git.
 
 <p align="center">
-  <img src="diagrams/graph.png" alt="Grit Streak" width="400" />
-  <img src="diagrams/anime-typing.gif" alt="Grit Power" width="400" />
+  <img src="https://raw.githubusercontent.com/hammaadworks/grit/main/diagrams/graph.png" alt="Grit Streak" width="400" />
+  <img src="https://raw.githubusercontent.com/hammaadworks/grit/main/diagrams/anime-typing.gif" alt="Grit Power" width="400" />
 </p>
 
 ### 🎯 The "Pure UX" Mode
@@ -80,12 +80,13 @@ A beautiful interactive TUI to manage your "Juice."
 | Command | The Vibe |
 | :--- | :--- |
 | `grit commit` | **The Core.** Elite TUI + AI commit wizard. |
+| `grit branch` | **The Switch.** Unified context & Worktree manager. |
 | `grit status` | **The Hub.** Check metrics, velocity, and streak health. |
 | `grit dash` | **The View.** High-fidelity web-based intelligence dashboard. |
 | `grit spread` | **The Gap Filler.** Redistribute work across history. |
-| `grit log` | **The Flex.** Human-readable logs on jetpack rollerskates. |
+| `grit sponsor`| **The Love.** Support the ongoing Grit journey. 💖 |
 | `grit undo` | **The Oops.** Regress commits and restore state. |
-| `grit config` | **The Control.** Interactive setup and "Pure UX" mode. |
+| `grit config` | **The Control.** Interactive setup and remote manager. |
 
 ---
 
