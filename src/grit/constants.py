@@ -66,7 +66,8 @@ AI_ANALYSIS_QUOTES = [
     "Streaks are earned. Or just Grit-ted...",
     "CommitScribe: Your PR's secret weapon...",
     "Making your commits look like they belong in a museum...",
-    "Less 'fix', more Grit..."
+    "Less 'fix', more Grit...",
+    "Fetching the best commit message..."
 ]
 
 # Ollama defaults

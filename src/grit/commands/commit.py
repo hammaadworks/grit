@@ -587,7 +587,7 @@ def _generate_ai_commit_message(ai_url, ai_key, ai_model, state: StateManager, v
         
         # Keep the UI alive and updating while the thread is running
         while not future.done():
-            elapsed_total = time() - start_time
+            elapsed_total = time.time() - start_time
             
             # Select quote based on time rotation
             quote_index = int(elapsed_total // QUOTE_CHANGE_INTERVAL_SECONDS) % len(AI_ANALYSIS_QUOTES)
