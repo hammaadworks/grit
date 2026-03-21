@@ -6,7 +6,7 @@ from rich.table import Table
 from rich.text import Text
 
 from grit.state import StateManager
-from grit.sync import sync_historical_data
+from grit.synchronizer import sync_historical_data
 from grit.ui import (ACCENT_COLOR, BRAND_COLOR, console, ERROR_COLOR, get_key,
                      get_banner_layout, print_banner, SUCCESS_COLOR, WARN_COLOR)
 

@@ -8,7 +8,7 @@ from typing import Any
 
 from grit.allocator import DateAllocator
 from grit.state import StateManager
-from grit.sync import sync_historical_data
+from grit.synchronizer import sync_historical_data
 
 
 class DashboardHandler(http.server.SimpleHTTPRequestHandler):

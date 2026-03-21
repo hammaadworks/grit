@@ -44,6 +44,31 @@ RAW_DIFF_PROMPT_LIMIT = 4000
 AI_RETRIES = 2
 MAX_DRAFT_HISTORY = 50
 
+# Quote rotation for AI analysis
+QUOTE_CHANGE_INTERVAL_SECONDS = 4.0
+AI_ANALYSIS_QUOTES = [
+    "Grit: Making your laziness look like genius...",
+    "CommitScribe is judging your variable names...",
+    "Fixing your history because you couldn't...",
+    "Adding 'architectural rationale' to your 'idk'...",
+    "Your streak is safe with me. Shhh...",
+    "Polishing this turd of a diff...",
+    "Translating 'it works' to 'high-fidelity solution'...",
+    "Git doesn't have to know you took a nap...",
+    "Turning your chaos into conventional commits...",
+    "CommitScribe: Smarter than your last 10 messages...",
+    "Making your commit graph look busy for once...",
+    "Sassing your code into a professional draft...",
+    "Real developers use Grit. Lazy ones do too...",
+    "Stop 'oops'-ing and start Gritting...",
+    "Your history called. It's embarrassed. Fixing...",
+    "Drafting wisdom from your 3 AM brain-dump...",
+    "Streaks are earned. Or just Grit-ted...",
+    "CommitScribe: Your PR's secret weapon...",
+    "Making your commits look like they belong in a museum...",
+    "Less 'fix', more Grit..."
+]
+
 # Ollama defaults
 OLLAMA_NUM_CTX = "4096"
 OLLAMA_NUM_PREDICT = "256"

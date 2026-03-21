@@ -3,7 +3,7 @@ from datetime import datetime
 from loguru import logger
 from grit.ui import console, SUCCESS_COLOR, WARN_COLOR, BRAND_COLOR
 from grit.state import StateManager
-from grit.sync import fetch_github_contributions, merge_sync_data, get_local_git_stats
+from grit.synchronizer import fetch_github_contributions, merge_sync_data, get_local_git_stats
 
 def _sync_github(state: StateManager, username: str, year: Optional[int] = None):
     """

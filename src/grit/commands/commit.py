@@ -578,6 +578,8 @@ def _generate_ai_commit_message(ai_url, ai_key, ai_model, state: StateManager, v
     last_error = None
     with Live(console=console, refresh_per_second=UI_REFRESH_RATE) as live:
         from concurrent.futures import ThreadPoolExecutor
+        from grit.constants import AI_ANALYSIS_QUOTES, QUOTE_CHANGE_INTERVAL_SECONDS
+        
         executor = ThreadPoolExecutor(max_workers=1)
         future = executor.submit(
             generate_commit_message, diff, ai_url, ai_key, ai_model, verbose
@@ -585,12 +587,17 @@ def _generate_ai_commit_message(ai_url, ai_key, ai_model, state: StateManager, v
         
         # Keep the UI alive and updating while the thread is running
         while not future.done():
-            elapsed = time.time() - start_time
+            elapsed_total = time() - start_time
+            
+            # Select quote based on time rotation
+            quote_index = int(elapsed_total // QUOTE_CHANGE_INTERVAL_SECONDS) % len(AI_ANALYSIS_QUOTES)
+            current_quote = AI_ANALYSIS_QUOTES[quote_index]
+            
             ui = Columns([
                 Spinner("dots12", style=BRAND_COLOR),
                 Text.from_markup(
-                    f" [bold {BRAND_COLOR}]CommitScribe analyzing diff...[/bold {BRAND_COLOR}] "
-                    f"[dim]({elapsed:.1f}s)[/dim]"
+                    f" [bold {BRAND_COLOR}]{current_quote}[/bold {BRAND_COLOR}] "
+                    f"[dim]({elapsed_total:.1f}s)[/dim]"
                 )
             ])
             live.update(ui)

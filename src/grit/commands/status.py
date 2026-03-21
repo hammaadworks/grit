@@ -14,7 +14,7 @@ from grit.constants import HOUR_SECONDS
 from grit.allocator import DateAllocator
 from grit.commands.sync import _sync_github
 from grit.state import StateManager
-from grit.sync import get_local_git_stats, merge_sync_data
+from grit.synchronizer import get_local_git_stats, merge_sync_data
 from grit.ui import (BRAND_COLOR, console, show_victory_animation, SUCCESS_COLOR,
                      WARN_COLOR)
 from grit.updater import get_upgrade_command, is_update_available
