@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 174 100% 98%; /* F0FDFA */
+    --foreground: 172 61% 19%; /* 134E4A */
+    --card: 0 0% 100%;
+    --card-foreground: 172 61% 19%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 172 61% 19%;
+    --primary: 175 84% 31%; /* 0D9488 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 174 81% 40%; /* 14B8A6 */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 174 30% 90%;
+    --muted-foreground: 172 40% 40%;
+    --accent: 25 95% 53%; /* F97316 */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 174 30% 85%;
+    --input: 174 30% 85%;
+    --ring: 175 84% 31%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 172 61% 10%; /* Very dark teal/black */
+    --foreground: 174 100% 98%;
+    --card: 172 61% 13%;
+    --card-foreground: 174 100% 98%;
+    --popover: 172 61% 13%;
+    --popover-foreground: 174 100% 98%;
+    --primary: 175 84% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 174 81% 30%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 172 40% 20%;
+    --muted-foreground: 174 30% 70%;
+    --accent: 25 95% 53%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 172 40% 25%;
+    --input: 172 40% 25%;
+    --ring: 175 84% 40%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/30;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
