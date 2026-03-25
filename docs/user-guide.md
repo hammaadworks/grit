@@ -1,0 +1,137 @@
+# 📖 User Guide
+
+Get started with Grit in three easy steps.
+
+![Git Push Meme](https://media.tenor.com/bK1RAdR_iP4AAAAC/dog-coding.gif)
+
+---
+
+## 1. Initial Setup
+
+Before using Grit, you need to tell it your goals. Run the setup wizard:
+
+```bash
+$ grit config
+```
+
+You will be prompted for three simple things:
+
+1.  **Daily Target:** How many commits do you want per day?
+2.  **Start Date:** If today is full, when should Grit start backfilling?
+3.  **GitHub Username:** *(Optional)* We will fetch your public graph to prevent overwriting past activity.
+
+!!! tip "Headless Setup for CI/CD"
+    You can bypass the interactive prompts entirely using flags:
+    ```bash
+    $ grit config --target 5 --start 2024-01-01 --username yourgithub
+    ```
+
+---
+
+## 2. Committing Code
+
+Grit is designed to be frictionless. You can use it as a silent wrapper, or let it do the heavy lifting for you.
+
+### The Interactive DevX Wizard (Recommended)
+Simply type `grit commit` with no arguments to launch the Interactive Wizard.
+
+```bash
+$ grit commit
+```
+1.  **File Picker:** Use your arrow keys and Spacebar to select which files to stage.
+2.  **Semantic Auto-Commit:** Choose a conventional commit type, or select `✨ Auto-generate (AI)` to let Grit read your diff and write the perfect message for you.
+3.  **Smart Push:** Grit will ask if you want to push immediately. If the remote rejects it, Grit will gracefully offer to `git pull --rebase` for you.
+
+### Standard Execution
+Use it exactly like standard Git to bypass the wizard:
+
+=== "Standard"
+    ```bash
+    grit commit -m "fix: resolve memory leak"
+    ```
+
+=== "Bypass Hooks"
+    ```bash
+    grit commit -m "wip" --no-verify
+    ```
+
+!!! success "How it works"
+    Grit automatically generates a valid Git timestamp in your local timezone, injects it into `GIT_AUTHOR_DATE`, and safely executes the commit. If the commit fails (e.g. pre-commit hook failure) or the HEAD hash doesn't change, Grit will **not** increment your daily counter.
+
+---
+
+## 3. Quantum Undo (`grit undo`)
+
+Made a mistake? Committed to the wrong day? Use the panic button:
+
+```bash
+$ grit undo
+```
+
+This command safely performs a `git reset --soft HEAD~1` (keeping your files staged) and **decrements the commit count** in the Grit database, perfectly preserving your timeline.
+
+!!! warning "Push Protection"
+    If Grit detects that your commit has already been pushed to GitHub, it will warn you before allowing an undo to prevent you from rewriting public history.
+
+---
+
+## 4. Checking Status
+
+Want to know how many commits you have left for the day, or where your *next* commit will land?
+
+```bash
+$ grit status
+```
+
+**Example Output:**
+```text
+╭───────────────────────────────────────────────╮
+│ Today: 3/3 commits                            │
+│ ✓ Daily target met!                           │
+│ Next commit will be allocated to: 2024-03-25  │
+╰───────────────────────────────────────────────╯
+```
+
+---
+
+## Maintenance Commands
+
+### Self-Healing (`grit sync`)
+
+If you commit from a different computer, merge a PR on GitHub, or bypass Grit by using an IDE's source control tab, your local database will become out of sync. 
+
+To fix this, run:
+
+```bash
+$ grit sync
+```
+
+!!! info "Safe Merging"
+    Grit fetches your local `git log` and remote GitHub data, merging them using a strict `MAX(current, new)` rule. **It will never lower your commit count.**
+
+### Uninstallation (`grit ungrit`)
+
+If you want to completely wipe Grit's state and configuration:
+
+```bash
+$ grit ungrit
+```
+
+!!! warning "Scripted Teardown"
+    To bypass the confirmation prompt, use the force flag:
+    ```bash
+    $ grit ungrit --force
+    ```
+
+---
+
+## 🗺️ Next Up: Dive Deeper
+
+Ready to see how the sausage is made, or maybe contribute some code of your own?
+
+<div class="grid cards" markdown>
+
+-   :material-code-tags: **[Next Up: Developer Onboarding ➔](developer-guide.md)**
+    
+    Get your local environment running in under 2 minutes.
+</div>
