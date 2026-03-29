@@ -36,6 +36,11 @@ Instead of Python loops, we use a single SQL query to find the first available d
 - **Environment Awareness:** Detects `uv` vs `pip` to provide the correct upgrade command (`uv tool upgrade grit` or `pip install -U grit`).
 - **Notification:** `grit status` triggers the check and displays a "New Release" banner if a mismatch is detected.
 
+### E. AI-Native Commit Generation
+- **Philosophy:** Zero vendor lock-in. Supports any LLM (Ollama, Claude, Groq, OpenAI) via configurable endpoints.
+- **Implementation:** `src/grit/ai.py` handles the payload construction and Conventional Commit enforcement.
+- **Wizard Integration:** The zero-arg `grit commit` wizard allows users to trigger auto-generation based on the current staged diff.
+
 ## 3. Development Workflow (The "Grit Way")
 - **Dependency Management:** `uv` is mandatory. Use `uv sync` and `uv run`.
 - **TDD:** No feature or bug fix is accepted without a reproducing test in `tests/`.

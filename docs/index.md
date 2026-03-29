@@ -89,6 +89,7 @@ grit commit -m "Initial commit"
 <div class="grid cards" markdown>
 
 -   :material-book-open-page-variant: **[Read the User Guide ➔](user-guide.md)**
+-   :material-help-circle: **[FAQ & Troubleshooting ➔](faq.md)**
     
     Learn about dashboards, headless CI/CD setups, and uninstallation.
 

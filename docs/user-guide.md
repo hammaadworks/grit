@@ -14,21 +14,36 @@ Before using Grit, you need to tell it your goals. Run the setup wizard:
 $ grit config
 ```
 
-You will be prompted for three simple things:
+You will be prompted for four simple things:
 
 1.  **Daily Target:** How many commits do you want per day?
-2.  **Start Date:** If today is full, when should Grit start backfilling?
-3.  **GitHub Username:** *(Optional)* We will fetch your public graph to prevent overwriting past activity.
+2.  **Start Date:** The historical boundary for backfilling (YYYY-MM-DD).
+3.  **Allocation Strategy:** Choose between `today` (fill recent gaps first) or `start_date` (fill from the beginning).
+4.  **GitHub Username:** Your public username to synchronize your contribution graph.
 
 !!! tip "Headless Setup for CI/CD"
     You can bypass the interactive prompts entirely using flags:
     ```bash
-    $ grit config --target 5 --start 2024-01-01 --username yourgithub
+    $ grit config --target 5 --start 2024-01-01 --username yourgithub --fill-from today
     ```
 
 ---
 
-## 2. Committing Code
+## 2. Intelligence Dashboard (`grit dashboard`)
+
+Grit includes a built-in, high-fidelity web dashboard that works completely offline. It provides deep insights into your commit velocity and pipeline.
+
+```bash
+$ grit dashboard
+```
+
+- **Visual Velocity:** Interactive charts showing your last 30 days of work.
+- **Journey Progress:** Track exactly how many commits are pending to reach your "Green Wall" goal.
+- **Live Pipeline:** See where your next 10 commits will land before you even type them.
+
+---
+
+## 3. Committing Code
 
 Grit is designed to be frictionless. You can use it as a silent wrapper, or let it do the heavy lifting for you.
 
@@ -60,7 +75,7 @@ Use it exactly like standard Git to bypass the wizard:
 
 ---
 
-## 3. Quantum Undo (`grit undo`)
+## 4. Quantum Undo (`grit undo`)
 
 Made a mistake? Committed to the wrong day? Use the panic button:
 
@@ -75,9 +90,9 @@ This command safely performs a `git reset --soft HEAD~1` (keeping your files sta
 
 ---
 
-## 4. Checking Status
+## 5. Checking Status
 
-Want to know how many commits you have left for the day, or where your *next* commit will land?
+Want to know how many commits you have left for the day, or view your overall journey progress?
 
 ```bash
 $ grit status
@@ -85,10 +100,16 @@ $ grit status
 
 **Example Output:**
 ```text
+  █ █ █ ░ ░  3/5 today [OPTIMIZED]
+
+✦ Journey Progress: 42.5% ━━━━━━━━━━━━━━━━━━━━░░░░░░░░░░░░░░░░░░ 124 commits pending
+
 ╭───────────────────────────────────────────────╮
-│ Today: 3/3 commits                            │
-│ ✓ Daily target met!                           │
-│ Next commit will be allocated to: 2024-03-25  │
+│ Commit Intelligence Pipeline                  │
+├───────────────────────────────────────────────┤
+│ 2024-03-29  today        ◆  3/5               │
+│ 2024-03-28  yesterday    ✔  5/5               │
+│ 2024-03-27  next fill    ◇  2/5               │
 ╰───────────────────────────────────────────────╯
 ```
 
