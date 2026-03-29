@@ -19,10 +19,9 @@ class DateAllocator:
 
     def get_next_date(self) -> str:
         """
-        Determines the next date to allocate a commit to based on the 'Streak First' rule:
+        Determines the next date to allocate a commit to based on the configured strategy:
         1. If today's count < daily_target, return today.
-        2. If today is full, scan backwards from today to start_date to fill the most
-           recent gaps first (preserving the current streak).
+        2. If today is full, fill gaps based on 'fill_strategy' (today or start_date).
         3. If all past dates are full, schedule in the future (earliest available).
         
         Returns:
@@ -30,18 +29,23 @@ class DateAllocator:
         """
         target_str = self.state.get_config("daily_target")
         start_date = self.state.get_config("start_date")
+        fill_strategy = self.state.get_config("fill_strategy") or "today"
         
-        if not target_str or not start_date:
+        def is_placeholder(val):
+            return not val or val in ["Not configured", "None", ""]
+            
+        if is_placeholder(target_str) or is_placeholder(start_date):
             raise ValueError("Grit is not fully configured. Please run `grit config`.")
             
         daily_target = int(target_str)
         today = get_today()
         
-        # We use a unified SQL query to handle the priority-based allocation:
-        # Priority 1: Today
-        # Priority 2: Past dates (ordered descending to fix the streak)
-        # Priority 3: Future dates (ordered ascending to fill earliest available)
-        query = """
+        # Determine filling direction for past holes
+        # 'today' means DESC (closest to today first)
+        # 'start_date' means ASC (closest to start date first)
+        order_dir = "DESC" if fill_strategy == "today" else "ASC"
+        
+        query = f"""
         WITH RECURSIVE dates(d) AS (
             SELECT ? -- Start Date
             UNION ALL
@@ -61,7 +65,7 @@ class DateAllocator:
             END ASC,
             CASE 
                 WHEN d.d < ? THEN d.d 
-            END DESC, -- Fill the MOST RECENT past hole first (to fix the streak)
+            END {order_dir},
             d.d ASC   -- Fill the EARLIEST future hole first
         LIMIT 1;
         """
@@ -100,18 +104,24 @@ class DateAllocator:
         """
         target_str = self.state.get_config("daily_target")
         start_date = self.state.get_config("start_date")
-        if not target_str or not start_date:
+        
+        def is_placeholder(val):
+            return not val or val in ["Not configured", "None", ""]
+            
+        if is_placeholder(target_str) or is_placeholder(start_date):
             return []
             
         daily_target = int(target_str)
         today = get_today()
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        fill_strategy = self.state.get_config("fill_strategy") or "today"
+        order_dir = "DESC" if fill_strategy == "today" else "ASC"
         
         # We start with the guaranteed "Context Rows" (Yesterday and Today).
         res_dates = [today, yesterday]
         
         # Use the same priority logic as get_next_date to find the next few available slots.
-        query = """
+        query = f"""
         WITH RECURSIVE dates(d) AS (
             SELECT ? 
             UNION ALL
@@ -131,7 +141,7 @@ class DateAllocator:
             END ASC,
             CASE 
                 WHEN d.d < ? THEN d.d 
-            END DESC,
+            END {order_dir},
             d.d ASC
         LIMIT 10;
         """

@@ -52,12 +52,16 @@ def get_unstaged_files() -> list[str]:
     try:
         # --porcelain format: XY filename
         result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-        lines = result.stdout.strip().split('\n')
+        # We must NOT strip the entire output as it removes leading spaces from the first line
+        lines = result.stdout.splitlines()
         files = []
         for line in lines:
-            if not line: continue
-            # Only include files that are not fully staged (if X is ' ' or '?' or 'M' and Y is not ' ')
-            files.append(line[3:])
+            if not line or len(line) < 4: continue
+            
+            # In porcelain v1, the filename starts at index 3.
+            # We don't strip the line before this to preserve the fixed-width status columns.
+            filename = line[3:].strip('"')
+            files.append(filename)
         return files
     except Exception:
         return []

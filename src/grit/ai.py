@@ -4,7 +4,7 @@ from typing import Optional
 
 def generate_commit_message(diff: str, base_url: str, api_key: str, model: str) -> Optional[str]:
     """
-    Calls an OpenAI-compatible LLM endpoint to generate a perfect Conventional Commit message.
+    Calls an LLM endpoint (Ollama, Claude, OpenAI, etc.) to generate a perfect Conventional Commit message.
     """
     if not api_key or not base_url or not diff.strip():
         return None
@@ -29,7 +29,7 @@ def generate_commit_message(diff: str, base_url: str, api_key: str, model: str) 
         "Content-Type": "application/json"
     }
 
-    # Format OpenAI style payload (Supported by OpenAI, Groq, Ollama via /v1, Together, etc.)
+    # Format standard LLM payload (Supported by Ollama, Anthropic/Claude, OpenAI, etc.)
     payload = {
         "model": model,
         "messages": [

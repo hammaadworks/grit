@@ -115,3 +115,37 @@ class StateManager:
             )
             row = cursor.fetchone()
             return row[0] if row[0] else 0
+
+    def get_yearly_commits(self, year: int) -> int:
+        """Get the total commits for a specific YYYY year."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT SUM(count) FROM commits WHERE date LIKE ?", 
+                (f"{year}-%",)
+            )
+            row = cursor.fetchone()
+            return row[0] if row[0] else 0
+
+    def get_total_commits(self, start_date: str) -> int:
+        """Get the total commits since a specific YYYY-MM-DD date."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT SUM(count) FROM commits WHERE date >= ?", 
+                (start_date,)
+            )
+            row = cursor.fetchone()
+            return row[0] if row[0] else 0
+
+    def get_effective_commits(self, start_date: str, target: int) -> int:
+        """
+        Calculates 'Effective Commits' which is the sum of commits capped at the daily target.
+        This represents how much of the 'Green Wall' is actually built.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            # We use MIN(count, ?) to cap each day's contribution to the progress
+            cursor = conn.execute(
+                "SELECT SUM(MIN(count, ?)) FROM commits WHERE date >= ?", 
+                (target, start_date)
+            )
+            row = cursor.fetchone()
+            return row[0] if row[0] else 0

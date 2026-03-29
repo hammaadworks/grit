@@ -4,7 +4,7 @@ import subprocess
 import time
 import random
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Annotated
 import typer
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -20,8 +20,9 @@ from grit.state import StateManager
 from grit.allocator import DateAllocator
 from grit.executor import execute_git_commit, get_unstaged_files, get_staged_diff, has_staged_files, is_commit_pushed, get_head_author_date
 from grit.ai import generate_commit_message
-from grit.sync import fetch_github_contributions, get_local_git_stats, merge_sync_data
+from grit.sync import fetch_github_contributions, get_local_git_stats, merge_sync_data, sync_historical_data
 from grit.updater import is_update_available, get_upgrade_command
+from grit.dashboard import start_dashboard
 
 # Initialize the state globally for the CLI context
 state = StateManager()
@@ -41,23 +42,33 @@ def print_banner(animated: bool = False):
     Renders a premium minimalist banner to provide branding consistency.
     This banner is printed at the start of most high-level user commands.
     """
-    base_text = f"✦ GRIT v{__version__} — Intelligently distribute your commits"
+    ascii_art = r"""
+    ██████╗ ██████╗ ██╗████████╗
+    ██╔════╝ ██╔══██╗██║╚══██╔══╝
+    ██║  ███╗██████╔╝██║   ██║   
+    ██║   ██║██╔══██╗██║   ██║   
+    ╚██████╔╝██║  ██║██║   ██║   
+     ╚═════╝ ╚═╝  ╚═╝╚═╝   ╚═╝   
+    """
     
-    if animated and sys.stdout.isatty():
-        with Live(auto_refresh=False, console=console, transient=True) as live:
-            for i in range(len(base_text) + 1):
-                t = Text()
-                t.append(base_text[:i], style=f"bold {BRAND_COLOR}")
-                t.append(base_text[i:], style="dim")
-                live.update(Padding(t, (1, 0, 0, 0)), refresh=True)
-                time.sleep(0.015)
-                
-    banner = Text()
-    banner.append("✦ ", style=BRAND_COLOR)
-    banner.append("GRIT", style=f"bold {BRAND_COLOR}")
-    banner.append(f" v{__version__}", style="dim")
-    banner.append(" — Intelligently distribute your commits", style="dim")
-    console.print(Padding(banner, (1, 0, 0, 0)))
+    # Print ASCII art in BRAND_COLOR
+    for line in ascii_art.strip("\n").split("\n"):
+        console.print(Text(line, style=f"bold {BRAND_COLOR}"))
+    
+    tagline = Text()
+    tagline.append("✦ ", style=BRAND_COLOR)
+    tagline.append(f"v{__version__}", style="dim")
+    tagline.append(" — Intelligently distribute your commits", style="dim")
+    console.print(Padding(tagline, (0, 0, 1, 0)))
+
+def is_config_valid() -> bool:
+    """Checks if the core configuration variables are set and not placeholders."""
+    required_keys = ["daily_target", "start_date", "github_username", "fill_strategy"]
+    for key in required_keys:
+        val = state.get_config(key)
+        if not val or val == "Not configured" or val == "None" or val == "":
+            return False
+    return True
 
 def show_victory_animation():
     """
@@ -93,11 +104,20 @@ def main(ctx: typer.Context):
     Primary entry point for the Grit CLI.
     If invoked without a subcommand, intelligently routes to config or status.
     """
+    # Always print banner except for help
+    if "--help" not in sys.argv:
+        print_banner()
+
     if ctx.invoked_subcommand is None:
-        if not state.get_config("daily_target"):
+        if not is_config_valid():
             ctx.invoke(config)
         else:
             ctx.invoke(status)
+        raise typer.Exit()
+    elif ctx.invoked_subcommand not in ["config", "ungrit", "info", "dashboard"] and not is_config_valid():
+        err_console.print(f"[{WARN_COLOR}]⚠ Configuration is incomplete. Launching Control Center...[/{WARN_COLOR}]")
+        ctx.invoke(config)
+        raise typer.Exit()
 
 def validate_date(date_text: str) -> bool:
     """Strictly validates YYYY-MM-DD format."""
@@ -124,6 +144,8 @@ def get_key() -> str:
     try:
         tty.setraw(sys.stdin.fileno())
         ch = sys.stdin.read(1)
+        if ch == '\x03': # Ctrl+C
+            raise KeyboardInterrupt
         if ch == '\x1b': # Escape sequence
             ch += sys.stdin.read(2)
     finally:
@@ -132,30 +154,38 @@ def get_key() -> str:
 
 @app.command()
 def config(
-    target: Optional[int] = typer.Option(None, "--target", "-t", help="Daily commit target"),
-    start: Optional[str] = typer.Option(None, "--start", "-s", help="Start date (YYYY-MM-DD)"),
-    username: Optional[str] = typer.Option(None, "--username", "-u", help="GitHub username")
+    target: Annotated[Optional[int], typer.Option("--target", "-t", help="Daily commit target")] = None,
+    start: Annotated[Optional[str], typer.Option("--start", "-s", help="Start date (YYYY-MM-DD)")] = None,
+    username: Annotated[Optional[str], typer.Option("--username", "-u", help="GitHub username")] = None,
+    fill_from: Annotated[Optional[str], typer.Option("--fill-from", "-f", help="Fill strategy (today or start_date)")] = None
 ):
     """
     Grit Control Center: High-fidelity interactive settings management.
     Navigate with arrow keys, edit with Enter, and save with S.
     """
     # Headless Update Mode: Applied if any flags are passed.
-    if target is not None or start is not None or username is not None:
+    if any(v is not None for v in [target, start, username, fill_from]):
         if target is not None: state.set_config("daily_target", str(target))
         if start is not None: state.set_config("start_date", start)
         if username is not None: state.set_config("github_username", username)
+        if fill_from is not None: 
+            if fill_from in ["today", "start_date"]:
+                state.set_config("fill_strategy", fill_from)
+            else:
+                err_console.print(f"[{ERROR_COLOR}]✗ Invalid fill strategy. Use 'today' or 'start_date'.[/{ERROR_COLOR}]")
+                raise typer.Exit(1)
         console.print(f"[{SUCCESS_COLOR}]✓ Headless configuration applied.[/{SUCCESS_COLOR}]")
         return
 
     # Interactive Settings Schema
     options = [
-        {"id": "target", "title": "Daily Commit Target", "desc": "Maximum commits to allocate per calendar day.", "key": "daily_target", "default": "3"},
-        {"id": "start", "title": "Timeline Start Date", "desc": "The historical boundary for backfilling (YYYY-MM-DD).", "key": "start_date", "default": datetime.now().strftime("%Y-%m-%d")},
-        {"id": "user", "title": "GitHub Identity", "desc": "Your public username for contribution graph integration.", "key": "github_username", "default": "Not configured"},
-        {"id": "ai_url", "title": "AI: Base URL", "desc": "OpenAI-compatible API endpoint (e.g. https://api.openai.com/v1).", "key": "ai_base_url", "default": "Not configured"},
-        {"id": "ai_key", "title": "AI: API Key", "desc": "Your API token for the LLM provider.", "key": "ai_api_key", "default": "Not configured"},
-        {"id": "ai_model", "title": "AI: Model Name", "desc": "The model to use for Auto-Commits (e.g. gpt-4o-mini).", "key": "ai_model", "default": "Not configured"},
+        {"id": "target", "title": "Daily Commit Target *", "desc": "Maximum commits to allocate per calendar day.", "key": "daily_target", "default": "1"},
+        {"id": "start", "title": "Timeline Start Date *", "desc": "The historical boundary for backfilling (YYYY-MM-DD).", "key": "start_date", "default": datetime.now().strftime("%Y-%m-%d")},
+        {"id": "fill", "title": "Allocation Strategy *", "desc": "Where to fill gaps from (today or start_date).", "key": "fill_strategy", "default": "today"},
+        {"id": "user", "title": "GitHub Identity *", "desc": "Your public username for contribution graph integration.", "key": "github_username", "default": "Not configured"},
+        {"id": "ai_url", "title": "AI: Base URL", "desc": "LLM API endpoint (e.g. http://localhost:11434/v1 for Ollama, or Anthropic/Groq).", "key": "ai_base_url", "default": "Not configured"},
+        {"id": "ai_key", "title": "AI: API Key", "desc": "Your API token for the LLM provider (leave blank for local models).", "key": "ai_api_key", "default": ""},
+        {"id": "ai_model", "title": "AI: Model Name", "desc": "The model to use (e.g. llama3 for Ollama, claude-3-haiku-20240307).", "key": "ai_model", "default": "Not configured"},
     ]
     
     selected_idx = 0
@@ -223,8 +253,15 @@ def config(
                 selected_idx = (selected_idx + 1) % len(options)
             elif key in ('\r', '\n'): # Enter (Edit)
                 opt = options[selected_idx]
-                live.stop()
                 
+                # Special Case: Toggle for Strategy
+                if opt["id"] == "fill":
+                    current_val = state.get_config(opt["key"]) or opt["default"]
+                    new_val = "start_date" if current_val == "today" else "today"
+                    state.set_config(opt["key"], new_val)
+                    continue
+
+                live.stop()
                 current_val = state.get_config(opt["key"]) or opt["default"]
                 new_val = typer.prompt(f"Edit {opt['title']}", default=current_val)
                 
@@ -236,6 +273,9 @@ def config(
                 elif opt["id"] == "start" and not validate_date(new_val):
                     error_msg = "Invalid Date: Must use YYYY-MM-DD format."
                     valid = False
+                elif opt["id"] == "fill" and new_val not in ["today", "start_date"]:
+                    error_msg = "Invalid Strategy: Use 'today' or 'start_date'."
+                    valid = False
                 
                 if valid:
                     state.set_config(opt["key"], str(new_val))
@@ -244,14 +284,19 @@ def config(
                 console.clear()
             elif key.upper() == 'S':
                 live.stop()
+                # Ensure all visible options (including defaults) are persisted before sync
+                for opt in options:
+                    if not state.get_config(opt["key"]):
+                        state.set_config(opt["key"], opt["default"])
+
                 final_user = state.get_config("github_username")
-                if final_user and final_user != "Not configured":
-                    current_year = datetime.now().year
-                    with console.status(f"[bold {BRAND_COLOR}]Provisioning GitHub graph @{final_user}...[/bold {BRAND_COLOR}]", spinner="dots12"):
-                        _sync_github(str(final_user), current_year)
-                        state.set_config("github_next_sync_year", str(current_year - 1))
+                start_date = state.get_config("start_date")
                 
-                console.print(f"\n[bold {SUCCESS_COLOR}]✓ Environment optimized![/bold {SUCCESS_COLOR}] Settings persisted.")
+                if final_user and final_user != "Not configured" and start_date:
+                    with console.status(f"[bold {BRAND_COLOR}]Cold Start: Synchronizing historical data @{final_user}...[/bold {BRAND_COLOR}]", spinner="dots12"):
+                        sync_historical_data(state, str(final_user), str(start_date))
+                
+                console.print(f"\n[bold {SUCCESS_COLOR}]✓ Environment optimized![/bold {SUCCESS_COLOR}] Global historical state synchronized.")
                 break
             elif key.upper() == 'Q':
                 console.print("[dim]Aborted.[/dim]")
@@ -278,7 +323,6 @@ def sync():
     Performs a three-way merge to ensure the global source of truth is accurate.
     """
     username = state.get_config("github_username")
-    print_banner()
     
     with console.status(f"[bold {BRAND_COLOR}]Scanning local git log...[/bold {BRAND_COLOR}]", spinner="dots12"):
         local_data = get_local_git_stats()
@@ -311,13 +355,12 @@ def status():
     Renders the Grit Intelligence Dashboard.
     Displays metrics, the spillover pipeline, and celebrates daily goals.
     """
-    target_str = state.get_config("daily_target")
-    if not target_str:
-        err_console.print(f"[{ERROR_COLOR}]✗ Grit is not configured. Run `grit config`.[/{ERROR_COLOR}]")
+    if not is_config_valid():
+        err_console.print(f"[{WARN_COLOR}]⚠ Configuration is incomplete. Run `grit config`.[/{WARN_COLOR}]")
         raise typer.Exit(1)
         
-    print_banner()
-    
+    target_str = state.get_config("daily_target")
+        
     # Smart Caching for GitHub Sync (15-minute window)
     username = state.get_config("github_username")
     if username:
@@ -331,12 +374,31 @@ def status():
         merge_sync_data(state, local_data, verified_year=datetime.now().year)
 
     target = int(target_str)
-    today = datetime.now().strftime("%Y-%m-%d")
-    current_month = datetime.now().strftime("%Y-%m")
+    start_date = state.get_config("start_date")
+    today_dt = datetime.now()
+    today = today_dt.strftime("%Y-%m-%d")
+    current_month = today_dt.strftime("%Y-%m")
     
     count = state.get_commit_count(today)
     monthly_count = state.get_monthly_commits(current_month)
     
+    # Global Progress & ETA Calculation
+    total_days = 0
+    total_done = 0
+    pending = 0
+    progress_pct = 0.0
+    
+    if start_date:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        total_days = (today_dt - start_dt).days + 1
+        total_required = total_days * target
+        
+        # FIX: Progress is based on "Effective Commits" (capped at target per day)
+        # to show true graph optimization progress.
+        effective_done = state.get_effective_commits(start_date, target)
+        pending = max(0, total_required - effective_done)
+        progress_pct = min(100.0, (effective_done / total_required) * 100) if total_required > 0 else 0.0
+
     # Victory Celebration Logic
     goal_met = count >= target
     if goal_met and state.get_config("last_celebration") != today:
@@ -351,19 +413,45 @@ def status():
     grid.add_column(justify="left", ratio=2)
     grid.add_column(justify="right", ratio=1)
     
-    progress_bar = f"[{SUCCESS_COLOR if goal_met else BRAND_COLOR}]"
+    today_progress = f"[{SUCCESS_COLOR if goal_met else BRAND_COLOR}]"
     filled = min(count, target)
-    progress_bar += "█" * filled + "░" * (target - filled)
-    progress_bar += f"[/] [bold]{count}/{target}[/] [dim]commits[/dim]"
+    today_progress += "█" * filled + "░" * (target - filled)
+    today_progress += f"[/] [bold]{count}/{target}[/] [dim]today[/dim]"
     
     if goal_met:
-        progress_bar += f" [bold {SUCCESS_COLOR}]OPTIMIZED[/]"
+        today_progress += f" [bold {SUCCESS_COLOR}]OPTIMIZED[/]"
         
     month_text = Text(f"{datetime.now().strftime('%B')} Volume: ", style="dim")
     month_text.append(f"{monthly_count}", style="bold")
     
-    grid.add_row(progress_bar, month_text)
-    console.print(Padding(grid, (1, 2, 1, 2)))
+    grid.add_row(today_progress, month_text)
+    console.print(Padding(grid, (1, 2, 0, 2)))
+
+    # Global Journey Progress Bar (Commit Debt)
+    if start_date:
+        journey_grid = Table.grid(expand=True)
+        journey_grid.add_column(ratio=1)
+        
+        # Build a high-fidelity progress bar
+        bar_width = 40
+        filled_width = int((progress_pct / 100) * bar_width)
+        bar = Text()
+        bar.append("━" * filled_width, style=SUCCESS_COLOR)
+        bar.append("━" * (bar_width - filled_width), style="dim")
+        
+        debt_status = "ZERO DEBT" if pending == 0 else f"{pending} COMMITS BEHIND"
+        
+        # Build composite text object to ensure single-line rendering
+        journey_text = Text()
+        journey_text.append("✦ ", style=BRAND_COLOR)
+        journey_text.append("Optimization Progress: ", style="bold")
+        journey_text.append(f"{progress_pct:.1f}% ")
+        journey_text.append(bar)
+        journey_text.append(" ")
+        journey_text.append(debt_status, style=f"bold {WARN_COLOR if pending > 0 else SUCCESS_COLOR}")
+        
+        journey_grid.add_row(journey_text)
+        console.print(Padding(journey_grid, (0, 2, 1, 2)))
     
     # Pipeline View: Detailed breakdown of current and upcoming allocation slots.
     alloc_table = Table(box=None, padding=(0, 2), header_style=f"bold {BRAND_COLOR}", expand=True)
@@ -418,6 +506,14 @@ def status():
             pass
 
 @app.command()
+def dashboard(port: int = typer.Option(0, "--port", "-p", help="Port to run the dashboard on")):
+    """
+    Launches the Grit Intelligence Dashboard in your browser.
+    A high-fidelity offline-first GUI for your commit pipeline.
+    """
+    start_dashboard(port)
+
+@app.command()
 def info():
     """
     Displays the comprehensive Grit Manual and Command Reference.
@@ -425,8 +521,6 @@ def info():
     This command provides detailed documentation on every available command,
     all supported flags, and essential usage disclaimers.
     """
-    print_banner()
-    
     # 1. Introduction
     console.print(Padding(Text("SYSTEM OVERVIEW", style=f"bold {ACCENT_COLOR}"), (1, 2, 0, 2)))
     console.print(Padding(
@@ -445,7 +539,11 @@ def info():
         ("config", "Enter the interactive Control Center to manage your targets and identity.", [
             ("-t, --target [int]", "Set your daily commit goal."),
             ("-s, --start [date]", "Define the timeline start boundary (YYYY-MM-DD)."),
-            ("-u, --username [str]", "Link your GitHub identity for graph synchronization.")
+            ("-u, --username [str]", "Link your GitHub identity for graph synchronization."),
+            ("-f, --fill-from [str]", "Allocation strategy: 'today' or 'start_date'.")
+        ]),
+        ("dashboard", "Launch the high-fidelity web dashboard for visual intelligence.", [
+            ("-p, --port [int]", "Specify a custom port for the local server.")
         ]),
         ("commit", "The core wrapper for `git commit`. Run without arguments for the Interactive AI Wizard.", [
             ("[standard git flags]", "All native git arguments are passed through transparently."),
@@ -501,8 +599,6 @@ def undo():
     Quantum Undo: Safely regress the last commit and restore your streak count.
     Warns if the commit has already been pushed to a remote repository.
     """
-    print_banner(animated=True)
-    
     # Get HEAD information
     res = subprocess.run(["git", "show", "-s", "--format=%h|%s|%ad", "--date=short", "HEAD"], capture_output=True, text=True)
     if res.returncode != 0 or not res.stdout.strip():
@@ -579,8 +675,6 @@ def commit(ctx: typer.Context):
     
     # INTERACTIVE DEVX WIZARD (Zero arguments)
     if not args:
-        print_banner(animated=True)
-        
         # Step A: File Picker (Interactive `git add`)
         if not has_staged_files():
             files = get_unstaged_files()
@@ -608,13 +702,32 @@ def commit(ctx: typer.Context):
                     
             selected = set()
             idx = 0
+            visible_count = 12
+            scroll_offset = 0
             
             with Live(auto_refresh=False, console=console, screen=False) as live:
                 while True:
+                    # Sync scroll offset
+                    if idx < scroll_offset:
+                        scroll_offset = idx
+                    elif idx >= scroll_offset + visible_count:
+                        scroll_offset = idx - visible_count + 1
+
                     grid = Table.grid(expand=True)
-                    grid.add_row(Text("Select files to stage (Space to toggle, Enter to confirm):", style=f"bold {ACCENT_COLOR}"))
+                    grid.add_row(Text("Select files to stage (Space to toggle, Enter to confirm, Q to abort):", style=f"bold {ACCENT_COLOR}"))
+                    grid.add_row("") # Spacer
                     
-                    for i, item in enumerate(items):
+                    if scroll_offset > 0:
+                        grid.add_row(Text.from_markup(f"      ↑ [dim](more files above)[/dim]", style=BRAND_COLOR))
+
+                    # File selection table
+                    table = Table(box=None, padding=(0, 1), show_header=False, expand=True)
+                    table.add_column("Cursor", width=3, justify="center")
+                    table.add_column("Checkbox", width=5, justify="center")
+                    table.add_column("Path")
+
+                    for i in range(scroll_offset, min(scroll_offset + visible_count, len(items))):
+                        item = items[i]
                         is_cur = i == idx
                         
                         if item["type"] == "file":
@@ -625,19 +738,30 @@ def commit(ctx: typer.Context):
                             is_sel = len(fs) > 0 and all(f in selected for f in fs)
                             is_partial = len(fs) > 0 and any(f in selected for f in fs) and not is_sel
                             
-                        prefix = "▶ " if is_cur else "  "
+                        cursor = "▶" if is_cur else ""
                         indent = "  " * item["depth"]
-                        box = "[x]" if is_sel else ("[-]" if is_partial else "[ ]")
                         
-                        # Style: green for selected/partial, white for current, dim for unselected
-                        if is_sel or is_partial:
+                        # High-fidelity checkbox icons
+                        if is_sel:
+                            box = f"[{SUCCESS_COLOR}]✔[/]"
                             style = SUCCESS_COLOR
-                        elif is_cur:
-                            style = "white"
+                        elif is_partial:
+                            box = f"[{WARN_COLOR}]━[/]"
+                            style = SUCCESS_COLOR # Keep text success colored
                         else:
-                            style = "dim"
+                            box = "[dim]○[/dim]"
+                            style = "dim" if not is_cur else "white"
                             
-                        grid.add_row(Text.from_markup(f"{prefix}{indent}{box} {item['label']}", style=style))
+                        table.add_row(
+                            Text(cursor, style=f"bold {BRAND_COLOR}"),
+                            Text.from_markup(box),
+                            Text.from_markup(f"{indent}{item['label']}", style=style)
+                        )
+                    
+                    grid.add_row(table)
+                    
+                    if scroll_offset + visible_count < len(items):
+                         grid.add_row(Text.from_markup(f"      ↓ [dim](more files below)[/dim]", style=BRAND_COLOR))
                         
                     live.update(Padding(grid, (1, 2)), refresh=True)
                     key = get_key()
@@ -656,6 +780,9 @@ def commit(ctx: typer.Context):
                                 for f in fs: selected.discard(f)
                             else:
                                 for f in fs: selected.add(f)
+                    elif key.lower() == 'q':
+                        console.print("[dim]Aborted.[/dim]")
+                        raise typer.Exit(0)
                     elif key in ('\r', '\n'): 
                         break
             
@@ -673,50 +800,59 @@ def commit(ctx: typer.Context):
         
         commit_types = ["feat", "fix", "docs", "style", "refactor", "test", "chore"]
         options = []
-        if ai_key and ai_key != "Not configured":
+        if ai_key and ai_key != "Not configured" and ai_key != "":
             options.append("✨ Auto-generate (AI)")
         options.extend(commit_types)
+        options.append("↩ Go Back")
         
         idx = 0
         final_msg = ""
         
-        with Live(auto_refresh=False, console=console, screen=False) as live:
-            while True:
-                grid = Table.grid(expand=True)
-                grid.add_row(Text("Select commit type:", style=f"bold {ACCENT_COLOR}"))
-                for i, opt in enumerate(options):
-                    is_cur = i == idx
-                    prefix = "▶ " if is_cur else "  "
-                    style = f"bold {BRAND_COLOR}" if is_cur else "dim"
-                    grid.add_row(Text(f"{prefix}{opt}", style=style))
-                
-                live.update(Padding(grid, (1, 2)), refresh=True)
-                key = get_key()
-                
-                if key == '\x1b[A': idx = (idx - 1) % len(options)
-                elif key == '\x1b[B': idx = (idx + 1) % len(options)
-                elif key in ('\r', '\n'): break
-                
-        choice = options[idx]
-        if choice == "✨ Auto-generate (AI)":
-            diff = get_staged_diff()
-            with console.status(f"[bold {BRAND_COLOR}]AI analyzing diff...[/bold {BRAND_COLOR}]", spinner="dots12"):
-                msg = generate_commit_message(diff, ai_url, ai_key, ai_model)
-            if msg:
-                console.print(f"[{SUCCESS_COLOR}]✓ Generated:[/{SUCCESS_COLOR}] {msg}")
-                final_msg = msg
-            else:
-                console.print(f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]")
-                choice = "feat" # Fallback
-                
-        if not final_msg:
-            scope = typer.prompt("Scope (optional, press Enter to skip)", default="", show_default=False)
-            desc = typer.prompt("Description")
-            scope_str = f"({scope})" if scope else ""
-            final_msg = f"{choice}{scope_str}: {desc}"
+        while True:
+            with Live(auto_refresh=False, console=console, screen=False) as live:
+                while True:
+                    grid = Table.grid(expand=True)
+                    grid.add_row(Text("Select commit type:", style=f"bold {ACCENT_COLOR}"))
+                    for i, opt in enumerate(options):
+                        is_cur = i == idx
+                        prefix = "▶ " if is_cur else "  "
+                        style = f"bold {BRAND_COLOR}" if is_cur else "dim"
+                        grid.add_row(Text(f"{prefix}{opt}", style=style))
+                    
+                    live.update(Padding(grid, (1, 2)), refresh=True)
+                    key = get_key()
+                    
+                    if key == '\x1b[A': idx = (idx - 1) % len(options)
+                    elif key == '\x1b[B': idx = (idx + 1) % len(options)
+                    elif key in ('\r', '\n'): break
             
-        args = ["-m", final_msg]
-        console.print()
+            choice = options[idx]
+            if choice == "↩ Go Back":
+                 # Simple way to go back: restart the script or just call commit again?
+                 # Actually, we can just reset staged files and loop back to the start.
+                 subprocess.run(["git", "reset"])
+                 return commit(ctx)
+            
+            if choice == "✨ Auto-generate (AI)":
+                diff = get_staged_diff()
+                with console.status(f"[bold {BRAND_COLOR}]AI analyzing diff...[/bold {BRAND_COLOR}]", spinner="dots12"):
+                    msg = generate_commit_message(diff, ai_url, ai_key, ai_model)
+                if msg:
+                    console.print(f"[{SUCCESS_COLOR}]✓ Generated:[/{SUCCESS_COLOR}] {msg}")
+                    final_msg = msg
+                else:
+                    console.print(f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]")
+                    choice = "feat" # Fallback
+                
+            if not final_msg:
+                scope = typer.prompt("Scope (optional, press Enter to skip)", default="", show_default=False)
+                desc = typer.prompt("Description")
+                scope_str = f"({scope})" if scope else ""
+                final_msg = f"{choice}{scope_str}: {desc}"
+                
+            args = ["-m", final_msg]
+            console.print()
+            break
 
     # -- STANDARD EXECUTION FLOW --
     if "--amend" in args:
@@ -756,7 +892,6 @@ def commit(ctx: typer.Context):
 def ungrit(force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation")):
     """Securely decommission Grit and delete local state."""
     if not force:
-        print_banner()
         console.print(f"\n[{ERROR_COLOR}]Destroy local state?[/{ERROR_COLOR}]")
         if not typer.confirm("This will permanently remove all configuration."):
             console.print("[dim]Aborted.[/dim]")

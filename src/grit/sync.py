@@ -97,3 +97,25 @@ def merge_sync_data(state: StateManager, sync_data: Dict[str, int], verified_yea
         # If no explicit year, we infer from data (e.g. current year)
         # But usually we want explicit verification for historical safety.
         pass
+
+def sync_historical_data(state: StateManager, username: str, start_date_str: str, on_progress=None):
+    """
+    Performs a full historical synchronization from the start date's year to today.
+    Calls on_progress(year) if provided.
+    """
+    from datetime import datetime
+    current_year = datetime.now().year
+    
+    try:
+        start_year = int(start_date_str.split("-")[0])
+    except (ValueError, IndexError):
+        return
+        
+    for year in range(start_year, current_year + 1):
+        if on_progress:
+            on_progress(year)
+        data = fetch_github_contributions(username, year)
+        if data:
+            merge_sync_data(state, data, verified_year=year)
+        else:
+            state.add_synced_year(year)
