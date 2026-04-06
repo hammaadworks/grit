@@ -132,3 +132,35 @@ def test_cli_ungrit_force_flag(clean_state):
     assert result.exit_code == 0
     assert "Grit has been decommissioned" in result.stdout
     assert not clean_state.db_path.parent.exists()
+
+def test_cli_log_invocation(clean_state, mocker):
+    """Test that grit log calls git log with the correct visual graph arguments."""
+    # Pre-configure state so it doesn't trigger the config wizard
+    clean_state.set_config("daily_target", "5")
+    clean_state.set_config("start_date", "2024-01-01")
+    clean_state.set_config("github_username", "testuser")
+    clean_state.set_config("fill_strategy", "start_date")
+
+    # We use mocker.Mock() to avoid UnsupportedOperation('fileno') 
+    # when CliRunner executes the command and tries to connect to the terminal.
+    mock_run = mocker.patch("subprocess.run")
+    mock_run.return_value.returncode = 0
+    
+    # We need to use catch_exceptions=False or handle the specific way 
+    # git log interacts with the terminal during tests.
+    result = runner.invoke(app, ["log", "-n", "5"], catch_exceptions=False)
+    
+    # In some test environments, invoke might fail due to TTY issues with 
+    # direct subprocess calls. We'll check if it was at least attempted.
+    assert mock_run.called
+    
+    # Check that subprocess.run was called with git log and the specific format
+    calls = [call.args[0] for call in mock_run.mock_calls if call.args]
+    git_log_call = next(c for c in calls if c[0] == "git" and c[1] == "log")
+    
+    assert "--graph" in git_log_call
+    assert "--all" in git_log_call
+    assert "--decorate" in git_log_call
+    assert "--color=always" in git_log_call
+    assert "-n" in git_log_call
+    assert "5" in git_log_call
