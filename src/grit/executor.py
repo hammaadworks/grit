@@ -51,17 +51,65 @@ def get_unstaged_files() -> list[str]:
     """Returns a list of modified or untracked files from git status."""
     try:
         # --porcelain format: XY filename
-        result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        # -uall shows individual untracked files
+        result = subprocess.run(["git", "status", "--porcelain", "-uall"], capture_output=True, text=True)
         # We must NOT strip the entire output as it removes leading spaces from the first line
         lines = result.stdout.splitlines()
         files = []
         for line in lines:
             if not line or len(line) < 4: continue
             
-            # In porcelain v1, the filename starts at index 3.
-            # We don't strip the line before this to preserve the fixed-width status columns.
-            filename = line[3:].strip('"')
+            status_code = line[:2]
+            filename_part = line[3:]
+            
+            # If renamed (R) or copied (C), git shows "old -> new"
+            if 'R' in status_code or 'C' in status_code:
+                if " -> " in filename_part:
+                    filename = filename_part.split(" -> ")[-1].strip('"')
+                else:
+                    filename = filename_part.strip('"')
+            else:
+                filename = filename_part.strip('"')
+                
             files.append(filename)
+        return files
+    except Exception:
+        return []
+
+def get_status_files() -> list[tuple[str, str]]:
+    """Returns a list of (filename, status) tuples from git status."""
+    try:
+        # -uall shows individual untracked files
+        result = subprocess.run(["git", "status", "--porcelain", "-uall"], capture_output=True, text=True)
+        lines = result.stdout.splitlines()
+        files = []
+        for line in lines:
+            if not line or len(line) < 4: continue
+            
+            status_code = line[:2]
+            filename_part = line[3:]
+            
+            # If renamed (R) or copied (C), git shows "old -> new"
+            if 'R' in status_code or 'C' in status_code:
+                if " -> " in filename_part:
+                    filename = filename_part.split(" -> ")[-1].strip('"')
+                else:
+                    filename = filename_part.strip('"')
+            else:
+                filename = filename_part.strip('"')
+
+            # Simplified mapping:
+            # 1. Deleted takes precedence (D or d)
+            if 'D' in status_code:
+                status = 'deleted'
+            # 2. Untracked (??) or Added (A) is New
+            elif status_code == '??' or 'A' in status_code:
+                status = 'new'
+            # 3. Everything else is Modified
+            else:
+                status = 'modified'
+            
+            files.append((filename, status))
         return files
     except Exception:
         return []
