@@ -407,6 +407,7 @@ def status():
 
     allocator = DateAllocator(state)
     allocations = allocator.get_status_allocations()
+    next_date = allocator.get_next_date()
     
     # Dashboard Layout: Top Metrics
     grid = Table.grid(expand=True)
@@ -475,15 +476,16 @@ def status():
             status_icon = "✔" if is_full else "◇"
             status_style = SUCCESS_COLOR if is_full else "dim"
         
-        if is_next_fill:
-            phase = "NEXT FILL"
-            row_style = f"on {BRAND_COLOR} bold white"
-        elif is_today:
+        if i == 0:
             phase = "today"
-            row_style = ""
+        elif i == 1:
+            phase = "next"
+        elif i == 2:
+            phase = "fill"
         else:
             phase = "then fill"
-            row_style = ""
+            
+        row_style = f"on {BRAND_COLOR} bold white" if is_next_fill else ""
             
         alloc_table.add_row(
             date_str, 

@@ -85,8 +85,9 @@
             border-radius: 2px;
             background: #0d1117;
             transition: transform 0.1s ease;
+            cursor: pointer;
         }
-        .cell:hover { transform: scale(1.5); z-index: 10; border: 1px solid var(--text-dim); }
+        .cell:hover { transform: scale(1.5); z-index: 10; border: 1px solid var(--text-dim); opacity: 1; }
         .lvl-0 { background: #161b22; }
         .lvl-1 { background: #0e4429; }
         .lvl-2 { background: #006d32; }
@@ -276,6 +277,15 @@
                 </div>
                 <div class="overflow-x-auto pb-4">
                     <div id="contribution_graph" class="contribution-grid"></div>
+                </div>
+                <div id="tile_info" class="hidden mt-4 p-4 rounded-xl bg-black border border-[#14b8a6]/30 animate-in fade-in slide-in-from-top-2">
+                    <div class="flex items-center gap-4">
+                        <div id="tile_info_color" class="w-4 h-4 rounded-sm"></div>
+                        <div>
+                            <p class="text-[10px] font-black text-[#14b8a6] uppercase tracking-widest">Selected Intelligence Point</p>
+                            <p class="text-white font-bold"><span id="tile_info_date"></span> — <span id="tile_info_count"></span> commits</p>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex justify-between items-center text-[10px] text-[#94a3b8] font-bold mono uppercase border-t border-[#133838] pt-8 mt-6">
                     <p>SNAPSHOT: <span id="last_sync_time">--:--:--</span></p>
@@ -473,12 +483,22 @@
             // ⛓️ Pipeline View
             const container = document.getElementById('pipeline_list');
             container.innerHTML = '';
+            document.getElementById('next_slot_date').textContent = '--';
             pipeline.forEach((item, idx) => {
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center py-3 border-b border-[#133838]/50 last:border-none';
-                const label = idx === 0 ? 'Today' : (idx === 1 ? 'Yesterday' : item.date);
+                
+                let label = '';
+                if (idx === 0) label = 'Today';
+                else if (idx === 1) label = 'Next';
+                else if (idx === 2) label = 'Fill';
+                else label = 'Then Fill';
+                
                 const isFull = item.count >= item.target;
-                if (idx === 2) document.getElementById('next_slot_date').textContent = item.date;
+                // Highlight the first non-full slot as the next priority
+                if (!document.getElementById('next_slot_date').textContent || document.getElementById('next_slot_date').textContent === '--') {
+                    if (!isFull) document.getElementById('next_slot_date').textContent = item.date;
+                }
                 div.innerHTML = `
                     <div>
                         <p class="text-[12px] font-bold ${isFull ? 'text-[#f0fdfa]' : 'text-[#94a3b8]'}">${label}</p>
@@ -504,6 +524,7 @@
             cells.forEach(day => {
                 const cell = document.createElement('div');
                 cell.className = 'cell';
+                cell.title = `${day.date}: ${day.count} commits`;
                 const ratio = day.count / target;
                 let lvl = 0;
                 if (day.count > 0) {
@@ -513,6 +534,20 @@
                     else lvl = 1;
                 }
                 cell.classList.add(`lvl-${lvl}`);
+                
+                // Click listener for tile info
+                cell.onclick = () => {
+                    const infoBox = document.getElementById('tile_info');
+                    const infoDate = document.getElementById('tile_info_date');
+                    const infoCount = document.getElementById('tile_info_count');
+                    const infoColor = document.getElementById('tile_info_color');
+                    
+                    infoBox.classList.remove('hidden');
+                    infoDate.textContent = day.date;
+                    infoCount.textContent = day.count;
+                    infoColor.className = `w-4 h-4 rounded-sm lvl-${lvl}`;
+                };
+                
                 graph.appendChild(cell);
             });
         }

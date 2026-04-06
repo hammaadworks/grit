@@ -136,18 +136,18 @@ class DateAllocator:
             rows = cursor.fetchall()
             next_dates = [row[0] for row in rows]
             
-            # Fill out the remaining two slots from the query results.
+            # Fill out the remaining slots from the query results.
             for nd in next_dates:
                 if nd not in res_dates:
                     res_dates.append(nd)
-                if len(res_dates) >= 3:
+                if len(res_dates) >= 4:
                     break
             
             # Emergency fallback: If search space is exhausted, simply increment days.
-            if len(res_dates) < 3:
+            if len(res_dates) < 4:
                 last_date_str = res_dates[-1] if res_dates else today
                 last_date = datetime.strptime(last_date_str, "%Y-%m-%d")
-                while len(res_dates) < 3:
+                while len(res_dates) < 4:
                     last_date += timedelta(days=1)
                     res_dates.append(last_date.strftime("%Y-%m-%d"))
         
