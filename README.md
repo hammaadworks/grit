@@ -56,7 +56,10 @@ Alternatively, you can download the latest source code or wheels from [GitHub Re
    Open the high-fidelity visualization GUI. It launches in the background by default!
    ```bash
    grit dash
-   # Or run in foreground: grit dash --logs
+   # To stop the background server:
+   grit dash --stop
+   # To run in foreground:
+   grit dash --logs
    ```
 
 ## ⚠️ Important Disclaimers

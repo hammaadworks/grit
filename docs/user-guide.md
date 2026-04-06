@@ -37,8 +37,10 @@ Grit includes a built-in, high-fidelity web dashboard that works completely offl
 $ grit dash
 ```
 
-*Note: The dashboard runs in the background by default so you can keep using your terminal. Use `grit dash --logs` to run it in the foreground.*
+*Note: The dashboard runs in the background by default. Grit tracks the process ID (PID) so you can manage it easily.*
 
+- **Foreground Mode:** Run `grit dash --logs` to view server logs directly in your terminal.
+- **Stop Server:** Run `grit dash --stop` (or `-s`) to safely terminate any running background dashboard.
 - **Visual Velocity:** Interactive charts showing your last 30 days of work.
 - **Journey Progress:** Track exactly how many commits are pending to reach your "Green Wall" goal.
 - **Live Pipeline:** See where your next 10 commits will land before you even type them.

@@ -314,13 +314,17 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 scope = typer.prompt(f"Scope (optional)", default="", show_default=False)
                 subject = typer.prompt(f"Subject")
                 
-                console.print(f"[{ACCENT_COLOR}]Body (optional, press Enter twice to finish):[/{ACCENT_COLOR}]")
+                console.print(f"\n[{ACCENT_COLOR}]Body (optional):[/{ACCENT_COLOR}]")
+                console.print(f"[dim]Type your message below. Press Enter on an empty line to finish.[/dim]")
                 body_lines = []
                 while True:
-                    line = input("> ")
-                    if not line:
+                    try:
+                        line = input(f"[{BRAND_COLOR}]>[/] ")
+                        if not line:
+                            break
+                        body_lines.append(line)
+                    except EOFError:
                         break
-                    body_lines.append(line)
                 body = "\n".join(body_lines)
                 
                 final_msg = f"{type_prefix}"
