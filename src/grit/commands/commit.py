@@ -9,7 +9,7 @@ from rich.padding import Padding
 from rich.prompt import Confirm
 from grit.ui import (
     console, err_console, BRAND_COLOR, SUCCESS_COLOR, WARN_COLOR, ERROR_COLOR, ACCENT_COLOR,
-    get_key
+    get_key, get_banner_layout, run_text_input
 )
 from grit.state import StateManager
 from grit.allocator import DateAllocator
@@ -108,7 +108,7 @@ def run_commit(state: StateManager, ctx: typer.Context):
         visible_count = 12
         scroll_offset = 0
         
-        with Live(auto_refresh=False, console=console, screen=False) as live:
+        with Live(auto_refresh=False, console=console, screen=True) as live:
             while True:
                 # Calculate visible items based on collapsed state (prefix-based inheritance)
                 visible_items = []
@@ -142,12 +142,16 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 elif idx >= scroll_offset + visible_count:
                     scroll_offset = idx - visible_count + 1
 
+                # Compose high-fidelity view
                 grid = Table.grid(expand=True)
-                grid.add_row(Text("Select files to stage (Space: toggle, Tab/←/→: fold, Enter: confirm, Q: abort):", style=f"bold {ACCENT_COLOR}"))
-                grid.add_row("") # Spacer
+                grid.add_row(get_banner_layout())
+                
+                selection_grid = Table.grid(expand=True)
+                selection_grid.add_row(Text("Select files to stage (Space: toggle, Tab/←/→: fold, Enter: confirm, Q: abort):", style=f"bold {ACCENT_COLOR}"))
+                selection_grid.add_row("") # Spacer
                 
                 if scroll_offset > 0:
-                    grid.add_row(Text.from_markup(f"      ↑ [dim](more files above)[/dim]", style=BRAND_COLOR))
+                    selection_grid.add_row(Text.from_markup(f"      ↑ [dim](more files above)[/dim]", style=BRAND_COLOR))
 
                 # File selection table
                 table = Table(box=None, padding=(0, 1), show_header=False, expand=False)
@@ -208,12 +212,13 @@ def run_commit(state: StateManager, ctx: typer.Context):
                         Text.from_markup(f"{indent}{label}", style=style)
                     )
                 
-                grid.add_row(table)
+                selection_grid.add_row(table)
                 
                 if scroll_offset + visible_count < len(visible_items):
-                     grid.add_row(Text.from_markup(f"      ↓ [dim](more files below)[/dim]", style=BRAND_COLOR))
-                    
-                live.update(Padding(grid, (1, 2)), refresh=True)
+                     selection_grid.add_row(Text.from_markup(f"      ↓ [dim](more files below)[/dim]", style=BRAND_COLOR))
+                
+                grid.add_row(Padding(selection_grid, (0, 4)))
+                live.update(grid, refresh=True)
                 key = get_key()
                 
                 if key == '\x1b[A': idx = (idx - 1) % len(visible_items)
@@ -278,26 +283,14 @@ def run_commit(state: StateManager, ctx: typer.Context):
         final_msg = ""
         
         while True:
-            with Live(auto_refresh=False, console=console, screen=False) as live:
-                while True:
-                    grid = Table.grid(expand=True)
-                    grid.add_row(Text("Select commit type:", style=f"bold {ACCENT_COLOR}"))
-                    for i, opt in enumerate(options):
-                        is_cur = i == idx
-                        prefix = "▶ " if is_cur else "  "
-                        style = f"bold {BRAND_COLOR}" if i == idx else "dim"
-                        grid.add_row(Text(f"{prefix}{opt}", style=style))
-                    
-                    live.update(Padding(grid, (1, 2)), refresh=True)
-                    key = get_key()
-                    
-                    if key == '\x1b[A': idx = (idx - 1) % len(options)
-                    elif key == '\x1b[B': idx = (idx + 1) % len(options)
-                    elif key in ('\r', '\n'): break
+            choice, idx = run_selection_menu("Select commit type:", options, selected_idx=idx)
             
-            choice = options[idx]
+            if choice is None: # User pressed Q
+                console.print("[dim]Aborted.[/dim]")
+                raise typer.Exit(0)
+            
             if choice == "↩ Go Back":
-                 # Simple way to go back: call commit again?
+                 # Simple way to go back: reset staging area and re-run
                  subprocess.run(["git", "reset"])
                  return run_commit(state, ctx)
             
@@ -306,28 +299,25 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 with console.status(f"[bold {BRAND_COLOR}]AI analyzing diff...[/bold {BRAND_COLOR}]", spinner="dots12"):
                     msg = generate_commit_message(diff, ai_url, ai_key, ai_model)
                 if msg:
-                    final_msg = typer.edit(msg) or msg
+                    # Refine with high-fidelity text input
+                    final_msg = run_text_input("Refine AI Message", initial_text=msg)
+                    if not final_msg: final_msg = msg
                     break
                 else:
                     err_console.print(f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]")
-                    choice = "feat" # Default fallback
+                    idx = options.index("feat") # Default fallback index
+                    continue
             
-            if choice != "✨ Auto-generate (AI)":
-                # Manual Message Entry
-                type_prefix = choice
-                scope = typer.prompt(f"Scope (optional)", default="", show_default=False)
-                subject = typer.prompt(f"Subject")
-                
-                console.print(f"\n[{ACCENT_COLOR}]Body (optional): [dim](Opening editor for multi-line support...)[/dim]")
-                body = typer.edit() or ""
-                body = body.strip()
-                
-                final_msg = f"{type_prefix}"
-                if scope: final_msg += f"({scope})"
-                final_msg += f": {subject}"
-                if body:
-                    final_msg += f"\n\n{body}"
-                break
+            # Manual Message Entry using high-fidelity TUI
+            type_prefix = choice
+            instruction = f"Enter message for {type_prefix} commit:"
+            msg_template = f"{type_prefix}: "
+            
+            final_msg = run_text_input(instruction, initial_text=msg_template)
+            if not final_msg or final_msg == msg_template:
+                # Cancel if empty or just prefix
+                continue
+            break
 
         # Step C: Date Allocation & Final Execution
         allocator = DateAllocator(state)
@@ -347,6 +337,7 @@ def run_commit(state: StateManager, ctx: typer.Context):
                 subprocess.run(["git", "push"])
             
             # Chain grit status at the end
+            print_banner()
             run_status(state)
         else:
             console.print(f"[{WARN_COLOR}]⚠ Commit cancelled or failed.[/{WARN_COLOR}]")

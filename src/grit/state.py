@@ -181,3 +181,7 @@ class StateManager:
         )
         row = cursor.fetchone()
         return row[0] if row and row[0] else 0
+
+    def close(self):
+        """Closes the database connection."""
+        self._conn.close()

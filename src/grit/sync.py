@@ -1,5 +1,6 @@
 import subprocess
 import httpx
+from datetime import datetime
 from bs4 import BeautifulSoup
 from collections import Counter
 from typing import Dict
@@ -16,13 +17,15 @@ def parse_local_git_log(log_output: str) -> Dict[str, int]:
             counts[line] += 1
     return dict(counts)
 
-def get_local_git_stats(author: str = None) -> Dict[str, int]:
+def get_local_git_stats(author: str = None, since: str = None) -> Dict[str, int]:
     """
     Executes git log on the local repository to build a map of daily commits.
     """
     cmd = ["git", "log", "--format=%ad", "--date=short"]
     if author:
         cmd.append(f"--author={author}")
+    if since:
+        cmd.append(f"--since={since}")
         
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -43,7 +46,7 @@ def fetch_github_contributions(username: str, year: int = None) -> Dict[str, int
     try:
         response = httpx.get(url, timeout=10.0)
         response.raise_for_status()
-    except httpx.RequestError:
+    except (httpx.HTTPStatusError, httpx.RequestError, Exception):
         return {}
 
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -103,7 +106,6 @@ def sync_historical_data(state: StateManager, username: str, start_date_str: str
     Performs a full historical synchronization from the start date's year to today.
     Calls on_progress(year) if provided.
     """
-    from datetime import datetime
     current_year = datetime.now().year
     
     try:

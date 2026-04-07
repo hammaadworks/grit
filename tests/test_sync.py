@@ -67,8 +67,8 @@ def test_sync_historical_data(mocker):
     """Test sync_historical_data loop."""
     from grit.sync import sync_historical_data
     mock_state = mocker.Mock()
+    mock_state.get_commit_count.return_value = 0
     mocker.patch("grit.sync.fetch_github_contributions", return_value={"2024-01-01": 5})
-    mocker.patch("grit.sync.merge_sync_data")
     
     # Mock datetime in grit.sync
     mock_dt = mocker.patch("grit.sync.datetime")

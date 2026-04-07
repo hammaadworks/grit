@@ -89,9 +89,11 @@ def test_execute_grit_spread(mocker):
     assert success is True
     
     # Test failure path: Next call to run should raise exception
-    # But we need to make sure the cleanup subprocess.run call also doesn't crash everything
-    # We'll use a sequence of side_effects
-    mock_run.side_effect = [Exception("git failed"), success_mock, success_mock]
+    # 1. git branch --show-current (success)
+    # 2. git rev-parse (failure)
+    # 3. git checkout (cleanup)
+    # 4. git branch -D (cleanup)
+    mock_run.side_effect = [success_mock, Exception("git failed"), success_mock, success_mock]
     success = execute_grit_spread(hashes, dates, mock_state)
     assert success is False
 

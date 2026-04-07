@@ -4,6 +4,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from grit import __version__
 from grit.commands.commit import run_commit
 # Command Implementations
 from grit.commands.config import run_config_interactive
@@ -30,6 +31,12 @@ app = typer.Typer(
 )
 
 
+def version_callback(value: bool):
+    if value:
+        console.print(f"Grit v{__version__}")
+        raise typer.Exit()
+
+
 def is_config_valid() -> bool:
     """Checks if the core configuration variables are set and not placeholders."""
     required_keys = ["daily_target", "start_date", "github_username", "fill_strategy"]
@@ -41,13 +48,30 @@ def is_config_valid() -> bool:
 
 
 @app.callback(invoke_without_command=True)
-def main(ctx: typer.Context):
+def main(
+        ctx: typer.Context,
+        version: Annotated[
+            Optional[bool],
+            typer.Option("--version", "-v", callback=version_callback, is_eager=True)
+        ] = None
+):
     """
     Primary entry point for the Grit CLI.
     If invoked without a subcommand, intelligently routes to config or status.
     """
-    # Always print banner except for help
-    if "--help" not in sys.argv:
+    # Always print banner except for help, version, or interactive commands that
+    # handle their own branding (usually those that use full-screen Live).
+    is_interactive = any(arg in sys.argv for arg in ["config", "dashboard", "dash", "move"])
+    
+    # Handle the no-args case where we might jump straight into config
+    if ctx.invoked_subcommand is None and not is_config_valid():
+        is_interactive = True
+    
+    # Commit without args is interactive and uses custom UI
+    if "commit" in sys.argv and len(sys.argv) == 2:
+        is_interactive = True
+
+    if "--help" not in sys.argv and "-v" not in sys.argv and "--version" not in sys.argv and not is_interactive:
         print_banner()
 
     if ctx.invoked_subcommand is None:
@@ -120,12 +144,16 @@ def sync():
 
 
 @app.command()
-def status():
+def status(
+        yes: Annotated[
+            bool, typer.Option("--yes", "-y", help="Skip the repository state prompt")
+        ] = False
+):
     """
     Renders the Grit Intelligence Dashboard.
     Displays metrics, the spillover pipeline, and celebrates daily goals.
     """
-    run_status(state)
+    run_status(state, yes=yes)
 
 
 @app.command(name="dash", hidden=True)
@@ -252,12 +280,17 @@ def log(ctx: typer.Context):
 
 
 @app.command()
-def move():
+def move(
+        push: Annotated[
+            bool, typer.Option("--push", "-p", help="Force push changes to remote")
+        ] = False
+):
     """
     Grit Move: Interactive history re-allocator.
     Select a commit from your history and move it to the next available fill slot.
     """
-    run_move(state)
+    from grit.commands.move import run_move
+    run_move(state, push=push)
 
 
 @app.command()
@@ -306,9 +339,13 @@ def info():
               "All native git arguments are passed through transparently."),
              ("--amend",
               "Grit detects and warns that amends do not increment daily targets.")
-         ]), ("status",
-              "View your Intelligence Dashboard, commit capacity, and future pipeline.",
-              []),
+         ]),
+        ("status",
+         "View your Intelligence Dashboard, commit capacity, and future pipeline.",
+         [
+             ("-y, --yes", "Skip the repository state prompt.")
+         ]),
+
         ("sync",
          "Manually trigger a three-way merge between Local Git, Remote GitHub, "
          "and Grit State.",
@@ -318,7 +355,9 @@ def info():
 
         ("move",
          "Interactive history re-allocator. Select a commit to move to the next fill slot.",
-         []),
+         [
+             ("-p, --push", "Force push changes to remote after move.")
+         ]),
 
         ("dashboard",
          "Launch the high-fidelity web dashboard for visual intelligence. Alias: "
@@ -332,7 +371,8 @@ def info():
         ("spread",
          "Redistribute a range of commits across the timeline to fill history gaps.", [
              ("[commit-range]",
-              "The range of commits to redistribute (e.g. HEAD~5..HEAD).")
+              "The range of commits to redistribute (e.g. HEAD~5..HEAD)."),
+             ("-p, --push", "Force push changes to remote after spread.")
          ]),
         ("undo",
          "The 'Quantum Undo'. Safely regress the last commit and restore your streak "
@@ -367,7 +407,10 @@ def info():
 @app.command()
 def spread(
         commit_range: Annotated[
-            str, typer.Argument(help="Commit range to spread (e.g. HEAD~5..HEAD)")]
+            str, typer.Argument(help="Commit range to spread (e.g. HEAD~5..HEAD)")],
+        push: Annotated[
+            bool, typer.Option("--push", "-p", help="Force push changes to remote")
+        ] = False
 ):
     """
     Grit Spread: Redistributes a range of commits across the timeline.
@@ -417,7 +460,8 @@ def spread(
                     )
                 ) + 1
 
-    if is_commit_pushed():
+    is_pushed = is_commit_pushed()
+    if is_pushed:
         console.print(
             Padding(
                 Text(
@@ -441,6 +485,18 @@ def spread(
             f"[{SUCCESS_COLOR}]✓ Successfully redistributed {len(commit_hashes)} "
             f"commits.[/{SUCCESS_COLOR}]"
             )
+        
+        if push:
+            with console.status(
+                f"[bold {ACCENT_COLOR}]Synchronizing remote...[/bold {ACCENT_COLOR}]",
+                spinner="dots12"
+            ):
+                # We use force-with-lease for safety
+                res = subprocess.run(["git", "push", "--force-with-lease"], capture_output=True)
+                if res.returncode == 0:
+                    console.print(f"[{SUCCESS_COLOR}]✓ Remote synchronized.[/{SUCCESS_COLOR}]")
+                else:
+                    err_console.print(f"[{ERROR_COLOR}]✗ Failed to push to remote. You may need to manual push.[/{ERROR_COLOR}]")
     else:
         err_console.print(
             f"[{ERROR_COLOR}]✗ Failed to redistribute commits.[/{ERROR_COLOR}]"

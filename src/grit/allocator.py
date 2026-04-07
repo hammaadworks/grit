@@ -40,12 +40,18 @@ class DateAllocator:
         daily_target = int(target_str)
         today = get_today()
 
-        order_dir = "DESC" if fill_strategy == "today" else "ASC"
-
         # If we have current_counts, we can't easily do it in a single SQL query 
         # without complex temp tables. For small batches, we'll just fetch the top 
         # candidates and filter in Python.
 
+        # Strategy Logic:
+        # 1. Today is always priority 0.
+        # 2. If strategy is 'start_date', past dates (start_date to today-1) are priority 1, ASC.
+        # 3. If strategy is 'today', past dates are ignored or lowest priority.
+        # 4. Future dates are always priority 2, ASC.
+        
+        past_priority = 1 if fill_strategy == "start_date" else 3
+        
         query = f"""
         WITH RECURSIVE dates(d) AS (
             SELECT ? -- Start Date
@@ -57,21 +63,20 @@ class DateAllocator:
         SELECT d.d, COALESCE(c.count, 0)
         FROM dates d
         LEFT JOIN commits c ON d.d = c.date
+        WHERE COALESCE(c.count, 0) < ?
         ORDER BY 
             CASE 
                 WHEN d.d = ? THEN 0 
-                WHEN d.d < ? THEN 1 
+                WHEN d.d < ? THEN {past_priority} 
                 ELSE 2 
             END ASC,
-            CASE 
-                WHEN d.d < ? THEN d.d 
-            END {order_dir},
             d.d ASC
-        LIMIT 100; -- Fetch enough to find a gap
+        LIMIT 100;
         """
 
         with self.state._conn as conn:
-            cursor = conn.execute(query, (start_date, today, today, today, today))
+            # Query uses 5 placeholders: start_date, today+365, daily_target, today (priority), today (priority)
+            cursor = conn.execute(query, (start_date, today, daily_target, today, today))
             rows = cursor.fetchall()
 
             for date_str, db_count in rows:
@@ -107,7 +112,8 @@ class DateAllocator:
         daily_target = int(target_str)
         today = get_today()
         fill_strategy = self.state.get_config("fill_strategy") or "start_date"
-        order_dir = "DESC" if fill_strategy == "today" else "ASC"
+        
+        past_priority = 1 if fill_strategy == "start_date" else 3
 
         # We start with the guaranteed "Context Rows" (Today).
         res_dates = [today]
@@ -129,19 +135,17 @@ class DateAllocator:
         ORDER BY 
             CASE 
                 WHEN d.d = ? THEN 0 
-                WHEN d.d < ? THEN 1 
+                WHEN d.d < ? THEN {past_priority} 
                 ELSE 2 
             END ASC,
-            CASE 
-                WHEN d.d < ? THEN d.d 
-            END {order_dir},
             d.d ASC
         LIMIT 10;
         """
 
         with self.state._conn as conn:
+            # Query uses 5 placeholders: start_date, today+365, target, today (priority), today (priority)
             cursor = conn.execute(
-                query, (start_date, today, daily_target, today, today, today)
+                query, (start_date, today, daily_target, today, today)
                 )
             rows = cursor.fetchall()
             next_dates = [row[0] for row in rows]

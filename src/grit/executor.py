@@ -138,6 +138,14 @@ def has_staged_files() -> bool:
     except Exception:
         return False
 
+def has_unstaged_files() -> bool:
+    """Checks if there are any files currently modified but not staged."""
+    try:
+        result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        return len(result.stdout.strip()) > 0
+    except Exception:
+        return False
+
 def execute_git_commit(args: list[str], target_date: str, state: StateManager) -> bool:
     """
     Executes the vanilla `git commit` command with the injected GIT_AUTHOR_DATE 
@@ -180,8 +188,7 @@ def execute_grit_spread(commit_hashes: list[str], hash_to_date: dict[str, str], 
         return False
         
     # Safety Check: Is the working directory clean?
-    status_res = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-    if status_res.stdout.strip():
+    if has_unstaged_files():
         print("Your working directory has unstaged changes. Please commit or stash them before spreading.")
         return False
 
@@ -191,24 +198,21 @@ def execute_grit_spread(commit_hashes: list[str], hash_to_date: dict[str, str], 
         # Detached HEAD? Let's use the current hash
         original_branch = get_head_hash()
 
-    # Base is the parent of the first commit in the range
-    first_commit = commit_hashes[0]
-    base_res = subprocess.run(["git", "rev-parse", f"{first_commit}^1"], capture_output=True, text=True)
-    
-    if base_res.returncode != 0:
-        # If no parent exists, it's a root commit. We can't easily rebase/cherry-pick it onto 'nothing'
-        # without --orphan, but for simplicity we'll assume the range starts AFTER the root commit
-        # or we'll handle it by checking out the root commit and amending it.
-        # Actually, if it's the root, we can use the root itself as the starting point.
-        is_root = True
-        base_commit = first_commit
-    else:
-        is_root = False
-        base_commit = base_res.stdout.strip()
-    
     temp_branch = f"grit-spread-{int(datetime.now().timestamp())}"
     
     try:
+        # Base is the parent of the first commit in the range
+        first_commit = commit_hashes[0]
+        base_res = subprocess.run(["git", "rev-parse", f"{first_commit}^1"], capture_output=True, text=True)
+        
+        if base_res.returncode != 0:
+            # If no parent exists, it's a root commit.
+            is_root = True
+            base_commit = first_commit
+        else:
+            is_root = False
+            base_commit = base_res.stdout.strip()
+            
         if is_root:
             # If the first commit is root, we checkout it and amend it first.
             subprocess.run(["git", "checkout", "-b", temp_branch, base_commit], check=True, capture_output=True)

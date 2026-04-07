@@ -6,7 +6,7 @@ from rich.text import Text
 from rich.padding import Padding
 from grit.ui import (
     console, err_console, BRAND_COLOR, SUCCESS_COLOR, WARN_COLOR, ERROR_COLOR, ACCENT_COLOR,
-    get_key
+    get_key, get_banner_layout
 )
 from grit.state import StateManager
 from grit.allocator import DateAllocator
@@ -23,7 +23,7 @@ def get_commit_original_date(commit_hash: str) -> str:
     except Exception:
         return ""
 
-def run_move(state: StateManager):
+def run_move(state: StateManager, push: bool = False):
     """
     Grit Move: Interactive history re-allocator.
     Select a commit from your history and move it to the next available fill slot.
@@ -57,53 +57,14 @@ def run_move(state: StateManager):
         return
 
     # 2. Selection UI
-    idx = 0
-    selected_commit = None
+    options = [f"{c['hash']} - {c['subject'][:50]}" for c in commits]
+    choice, idx = run_selection_menu("Select a commit to move:", options)
     
-    with Live(auto_refresh=False, console=console, screen=False) as live:
-        while True:
-            grid = Table.grid(expand=True)
-            grid.add_row(Text("Select a commit to move to the next fill slot:", style=f"bold {ACCENT_COLOR}"))
-            grid.add_row("") # Spacer
-            
-            table = Table(box=None, padding=(0, 1), show_header=False, expand=True)
-            table.add_column("Cursor", width=2)
-            table.add_column("Hash", width=8)
-            table.add_column("Details")
-            
-            for i, commit in enumerate(commits):
-                is_cur = i == idx
-                cursor = "▶" if is_cur else ""
-                style = f"bold {BRAND_COLOR}" if is_cur else "dim"
-                
-                details = Text()
-                details.append(f"{commit['subject'][:50]:<50} ", style="white" if is_cur else "dim")
-                details.append(f"• {commit['author']} ", style="cyan" if is_cur else "dim")
-                details.append(f"({commit['time']})", style=SUCCESS_COLOR if is_cur else "dim")
-                
-                table.add_row(
-                    Text(cursor, style=f"bold {BRAND_COLOR}"),
-                    Text(commit['hash'], style=style),
-                    details
-                )
-                
-            grid.add_row(table)
-            grid.add_row(Text("\n [↑↓] Navigate  [Enter] Select  [Q] Abort", style="dim"))
-            
-            live.update(Padding(grid, (1, 2)), refresh=True)
-            key = get_key()
-            
-            if key == '\x1b[A': idx = (idx - 1) % len(commits)
-            elif key == '\x1b[B': idx = (idx + 1) % len(commits)
-            elif key.lower() == 'q':
-                console.print("[dim]Aborted.[/dim]")
-                return
-            elif key in ('\r', '\n'):
-                selected_commit = commits[idx]
-                break
-
-    if not selected_commit:
+    if choice is None:
+        console.print("[dim]Aborted.[/dim]")
         return
+        
+    selected_commit = commits[idx]
 
     # 3. Allocation & Confirmation
     allocator = DateAllocator(state)
@@ -118,8 +79,6 @@ def run_move(state: StateManager):
     console.print(f"[{BRAND_COLOR}]✦ Moving Commit:[/{BRAND_COLOR}] {selected_commit['hash']} - {selected_commit['subject']}")
     
     # Check if pushed
-    # Note: is_commit_pushed() in executor check HEAD. We need one for specific hash.
-    # I'll do a quick local check.
     is_pushed = False
     try:
         p_res = subprocess.run(
@@ -131,7 +90,7 @@ def run_move(state: StateManager):
 
     if is_pushed:
         console.print(f"[{ERROR_COLOR}]⚠ WARNING: This commit has already been pushed to remote.[/{ERROR_COLOR}]")
-        if not typer.confirm("Move anyway? (Requires force push later)", default=False):
+        if not push and not typer.confirm("Move anyway? (Requires force push later)", default=False):
             return
     elif not typer.confirm("Confirm move?", default=True):
         return
@@ -161,24 +120,26 @@ def run_move(state: StateManager):
         hash_to_date[h] = get_commit_original_date(h)
 
     with console.status(f"[bold {BRAND_COLOR}]Re-allocating history...[/bold {BRAND_COLOR}]", spinner="dots12"):
-        # We need to manually handle state here because execute_grit_spread 
-        # increments EVERYTHING in hash_to_date.
-        # But we only want to:
-        # 1. Decrement old_date
-        # 2. Let execute_grit_spread increment everything (which might be messy if some weren't tracked)
-        # Actually, the simplest way is to decrement old_date, 
-        # then let spread increment ALL dates in the range, 
-        # BUT spread only increments what's in hash_to_date.
-        
-        # A cleaner way: execute_grit_spread is a bit too "bulk" for this.
-        # But if we want it to work, we can:
         state.decrement_commit_count(old_date)
         success = execute_grit_spread(all_hashes, hash_to_date, state)
         
     if success:
         console.print(f"[{SUCCESS_COLOR}]✓ Successfully moved {commit_hash} to {next_date}.[/{SUCCESS_COLOR}]")
+        
+        if push:
+            with console.status(
+                f"[bold {ACCENT_COLOR}]Synchronizing remote...[/bold {ACCENT_COLOR}]",
+                spinner="dots12"
+            ):
+                res = subprocess.run(["git", "push", "--force-with-lease"], capture_output=True)
+                if res.returncode == 0:
+                    console.print(f"[{SUCCESS_COLOR}]✓ Remote synchronized.[/{SUCCESS_COLOR}]")
+                else:
+                    err_console.print(f"[{ERROR_COLOR}]✗ Failed to push to remote. You may need to manual push.[/{ERROR_COLOR}]")
+
         # Optional: run status
         from grit.commands.status import run_status
+        print_banner()
         run_status(state)
     else:
         # Revert decrement if failed? (Spread handles git revert but not our DB)

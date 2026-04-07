@@ -19,29 +19,43 @@ from grit.ui import (BRAND_COLOR, console, show_victory_animation, SUCCESS_COLOR
 from grit.updater import get_upgrade_command, is_update_available
 
 
-def run_status(state: StateManager):
+def run_status(state: StateManager, yes: bool = False):
     """
     Renders the Grit Intelligence Dashboard.
     Displays metrics, the spillover pipeline, and celebrates daily goals.
     """
     target_str = state.get_config("daily_target")
-
-    # Smart Caching for GitHub Sync (15-minute window)
+    start_date = state.get_config("start_date")
     username = state.get_config("github_username")
-    if username:
-        last_sync = state.get_last_sync_time()
-        if (time.time() - last_sync) > 900:
-            with console.status(
-                    "[dim]Synchronizing intelligence...[/dim]", spinner="dots12"
-                    ):
+
+    # 1. Update Check & GitHub Sync (Grouped under a single spinner if possible)
+    last_sync = state.get_last_sync_time()
+    last_update_check = state.get_config("last_update_check")
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    
+    needs_sync = username and (time.time() - last_sync) > 3600
+    needs_update_check = last_update_check != today_date
+    
+    if needs_sync or needs_update_check:
+        with console.status(
+                "[dim]Synchronizing intelligence (Remote)...[/dim]", spinner="dots12"
+                ):
+            if needs_update_check:
+                is_update_available(state)
+            
+            if needs_sync:
                 _sync_github(state, str(username), datetime.now().year)
                 state.update_sync_timestamp()
 
-        local_data = get_local_git_stats()
-        merge_sync_data(state, local_data, verified_year=datetime.now().year)
+    # 2. Local Intelligence Verification
+    if username:
+        with console.status(
+                "[dim]Synchronizing intelligence (Local)...[/dim]", spinner="dots12"
+                ):
+            local_data = get_local_git_stats(since=start_date)
+            merge_sync_data(state, local_data, verified_year=datetime.now().year)
 
     target = int(target_str)
-    start_date = state.get_config("start_date")
     today_dt = datetime.now()
     today = today_dt.strftime("%Y-%m-%d")
     current_month = today_dt.strftime("%Y-%m")
@@ -185,7 +199,7 @@ def run_status(state: StateManager):
         )
 
     # New Release Detection
-    latest = is_update_available(state)
+    latest = state.get_config("latest_version_available")
     if latest:
         upgrade_cmd = get_upgrade_command()
         upgrade_banner = Text()
@@ -204,7 +218,11 @@ def run_status(state: StateManager):
     # Vanilla Git Status Integration
     if sys.stdout.isatty():
         try:
-            if typer.confirm("\nView local repository state?", default=False):
+            show_status = yes
+            if not show_status:
+                show_status = typer.confirm("\nView local repository state?", default=False)
+            
+            if show_status:
                 console.print()
                 # Run vanilla git status directly to preserve native git colors and
                 # formatting
