@@ -1,4 +1,6 @@
+import os
 import subprocess
+import tempfile
 
 import typer
 from rich.live import Live
@@ -353,7 +355,7 @@ def _sync_staging_area(selected):
 
     subprocess.run(["git", "add"] + list(selected))
     console.print(
-        f"[{SUCCESS_COLOR}]✓ Staging area synchronized ({len(selected)} files selected).[/{SUCCESS_COLOR}]"
+        f"    [{SUCCESS_COLOR}]✓ Staging area synchronized ({len(selected)} files selected).[/{SUCCESS_COLOR}]"
     )
 
 
@@ -370,6 +372,7 @@ def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context):
     idx = 0
 
     while True:
+        console.print()
         choice, idx = run_selection_menu(
             "Select commit type:",
             options,
@@ -388,7 +391,7 @@ def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context):
         if choice == "✨ Auto-generate (AI)":
             msg = _generate_ai_commit_message(ai_url, ai_key, ai_model)
             if msg:
-                return _edit_multiline_commit_message(msg)
+                return _edit_ai_commit_message(msg)
             idx = options.index("feat")
             continue
 
@@ -432,25 +435,90 @@ def _manual_commit_message(type_prefix):
     else:
         prefix_part = type_prefix
 
-    body = _prompt_multiline_commit_message(prefix_part)
-    if not body.strip():
+    subject = _prompt_commit_subject(prefix_part)
+    if not subject.strip():
         console.print("[dim]Aborted.[/dim]")
         raise typer.Exit(0)
 
-    return f"{prefix_part}: {body}"
+    body = _prompt_commit_body()
+
+    return _compose_commit_message(prefix_part, subject, body)
 
 
 def _prompt_commit_scope():
-    console.print("[bold bright_cyan]Enter commit scope..[/bold bright_cyan]\n\n")
-    scope_value = typer.prompt("", default="")
-    return scope_value.replace("\n", " ").strip() if scope_value else ""
+    console.print("\n    [bold bright_cyan]Enter commit scope (optional):"
+                  " [/bold bright_cyan]", end="")
+    return _read_single_line().replace("\n", " ").strip()
 
 
-def _prompt_multiline_commit_message(prefix_part):
-    console.print("[bold bright_cyan]Enter commit message..[/bold bright_cyan]\n\n")
+def _prompt_commit_subject(prefix_part):
+    console.print("\n    [bold bright_cyan]Enter commit subject:"
+                  " [/bold bright_cyan]", end="")
+    console.print(f"[dim]{prefix_part}: [/dim]", end="")
+    return _read_single_line().strip()
+
+
+def _prompt_commit_body():
+    console.print("\n[bold bright_cyan]    Enter commit body (optional): "
+                  "[/bold bright_cyan]")
+    console.print("[dim]    Press Enter twice to finish • Ctrl+C to abort[/dim]")
+    return _read_multiline_input()
+
+
+def _edit_ai_commit_message(initial_text):
+    parsed = _parse_ai_commit_message(initial_text)
+
+    console.print("\n\n[bold bright_cyan]AI suggestion loaded..[/bold bright_cyan]\n\n")
+
+    scope_value = _prompt_ai_scope(parsed["scope"], parsed["type"])
+    prefix_part = f"{parsed['type']}({scope_value})" if scope_value else parsed["type"]
+
+    subject = _prompt_ai_subject(prefix_part, parsed["subject"])
+    if not subject.strip():
+        console.print("[dim]Aborted.[/dim]")
+        raise typer.Exit(0)
+
+    body = _prompt_ai_body(prefix_part, parsed["body"])
+
+    return _compose_commit_message(prefix_part, subject, body)
+
+
+def _prompt_ai_scope(default_scope, commit_type):
+    console.print("\n\n[bold bright_cyan]Enter commit scope..[/bold bright_cyan]\n\n")
+    console.print(f"[dim]Type: {commit_type}[/dim]\n")
+    return _read_single_line(default_scope).replace("\n", " ").strip()
+
+
+def _prompt_ai_subject(prefix_part, default_subject):
+    console.print("\n\n[bold bright_cyan]Enter commit subject..[/bold bright_cyan]\n\n")
+    console.print(f"[dim]Prefix: {prefix_part}[/dim]\n")
+    return _read_single_line(default_subject).strip()
+
+
+def _prompt_ai_body(prefix_part, default_body):
+    console.print("\n\n[bold bright_cyan]Enter commit body (optional, markdown supported)..[/bold bright_cyan]\n\n")
     console.print(f"[dim]Prefix: {prefix_part}[/dim]")
-    console.print("[dim]Press Enter twice to finish • Ctrl+C to abort[/dim]\n")
+    console.print("[dim]Edit below • Press Enter twice to finish • Ctrl+C to abort[/dim]\n")
 
+    if default_body.strip():
+        console.print("[dim]--- AI Body Suggestion ---[/dim]")
+        console.print(default_body)
+        console.print("[dim]--------------------------[/dim]\n")
+
+    result = _read_multiline_input()
+    return result if result.strip() else default_body.strip()
+
+
+def _read_single_line(default=""):
+    try:
+        line = input()
+        return line if line.strip() else default
+    except KeyboardInterrupt:
+        console.print("\n[dim]Aborted.[/dim]")
+        raise typer.Exit(0)
+
+
+def _read_multiline_input():
     lines = []
     empty_streak = 0
 
@@ -477,38 +545,41 @@ def _prompt_multiline_commit_message(prefix_part):
     return "\n".join(lines)
 
 
-def _edit_multiline_commit_message(initial_text):
-    console.print("[bold bright_cyan]Enter commit message..[/bold bright_cyan]\n\n")
-    console.print("[dim]Edit below (Press Enter twice to finish • Ctrl+C to abort)[/dim]\n")
-    console.print("[dim]--- AI Suggestion ---[/dim]")
-    console.print(initial_text)
-    console.print("[dim]---------------------[/dim]\n")
+def _compose_commit_message(prefix_part, subject, body):
+    final_lines = [f"{prefix_part}: {subject.strip()}"]
 
-    lines = []
-    empty_streak = 0
+    if body.strip():
+        final_lines.append("")
+        final_lines.extend(body.splitlines())
 
-    while True:
-        try:
-            line = input()
+    return "\n".join(final_lines)
 
-            if line == "":
-                empty_streak += 1
-                if empty_streak >= 2:
-                    break
-            else:
-                empty_streak = 0
 
-            lines.append(line)
+def _parse_ai_commit_message(msg):
+    lines = msg.splitlines()
+    first_line = lines[0].strip() if lines else ""
+    body = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
 
-        except KeyboardInterrupt:
-            console.print("\n[dim]Aborted.[/dim]")
-            raise typer.Exit(0)
+    commit_type = "feat"
+    scope = ""
+    subject = first_line
 
-    while lines and lines[-1] == "":
-        lines.pop()
+    if ": " in first_line:
+        prefix, subject_part = first_line.split(": ", 1)
+        subject = subject_part.strip()
 
-    result = "\n".join(lines).strip()
-    return result if result else initial_text
+        if "(" in prefix and prefix.endswith(")"):
+            commit_type = prefix.split("(", 1)[0].strip()
+            scope = prefix.split("(", 1)[1].rsplit(")", 1)[0].strip()
+        else:
+            commit_type = prefix.strip()
+
+    return {
+        "type": commit_type,
+        "scope": scope,
+        "subject": subject,
+        "body": body,
+    }
 
 
 # =========================
@@ -521,11 +592,26 @@ def _finalize_commit(state: StateManager, final_msg):
 
     console.print(f"\n[dim]Allocating commit to: [bold white]{target_date}[/bold white][/dim]")
 
-    if execute_git_commit(["-m", final_msg], target_date, state):
+    if _execute_multiline_git_commit(final_msg, target_date, state):
         console.print(f"[{SUCCESS_COLOR}]✓ Commit successfully distributed.[/{SUCCESS_COLOR}]")
         _post_commit_actions(state)
     else:
         console.print(f"[{WARN_COLOR}]⚠ Commit cancelled or failed.[/{WARN_COLOR}]")
+
+
+def _execute_multiline_git_commit(final_msg, target_date, state):
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".gitmsg", delete=False, encoding="utf-8") as tf:
+        tf.write(final_msg)
+        tf.flush()
+        temp_path = tf.name
+
+    try:
+        return execute_git_commit(["-F", temp_path], target_date, state)
+    finally:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
 
 
 def _run_passthrough_commit(state: StateManager, args):
