@@ -498,7 +498,7 @@ def _prompt_ai_subject(prefix_part, default_subject):
 def _prompt_ai_body(prefix_part, default_body):
     console.print("\n\n[bold bright_cyan]Enter commit body (optional, markdown supported)..[/bold bright_cyan]\n\n")
     console.print(f"[dim]Prefix: {prefix_part}[/dim]")
-    console.print("[dim]Edit below • Press Enter twice to finish • Ctrl+C to abort[/dim]\n")
+    console.print("[dim]Edit below • Press Enter twice to finish • Ctrl+C to abort[/dim]\n\n")
 
     if default_body.strip():
         console.print("[dim]--- AI Body Suggestion ---[/dim]")
@@ -590,7 +590,8 @@ def _finalize_commit(state: StateManager, final_msg):
     allocator = DateAllocator(state)
     target_date = allocator.get_next_date()
 
-    console.print(f"\n[dim]Allocating commit to: [bold white]{target_date}[/bold white][/dim]")
+    console.print(f"\n[bold bright cyan]Allocating commit to:"
+                  f" [bold white]{target_date}[/bold white][/bold bright cyan]")
 
     if _execute_multiline_git_commit(final_msg, target_date, state):
         console.print(f"[{SUCCESS_COLOR}]✓ Commit successfully distributed.[/{SUCCESS_COLOR}]")
