@@ -1,6 +1,6 @@
 [project]
 name = "grit"
-version = "0.1.0"
+version = "0.0.1"
 description = "Grit is a terminal-based CLI wrapper for git commit to intelligently distribute commits."
 readme = "README.md"
 authors = [

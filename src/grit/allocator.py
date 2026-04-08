@@ -46,11 +46,19 @@ class DateAllocator:
 
         # Strategy Logic:
         # 1. Today is always priority 0.
-        # 2. If strategy is 'start_date', past dates (start_date to today-1) are priority 1, ASC.
-        # 3. If strategy is 'today', past dates are ignored or lowest priority.
-        # 4. Future dates are always priority 2, ASC.
+        # 2. Past dates (start_date to today-1) are priority 1.
+        # 3. Future dates are always priority 2.
+        # 4. If strategy is 'today', past dates are sorted DESC (latest first).
+        # 5. If strategy is 'start_date', past dates are sorted ASC (earliest first).
         
-        past_priority = 1 if fill_strategy == "start_date" else 3
+        secondary_sort = "d.d ASC"
+        if fill_strategy == "today":
+            secondary_sort = """
+            CASE 
+                WHEN d.d < ? THEN -julianday(d.d)
+                ELSE julianday(d.d)
+            END ASC
+            """
         
         query = f"""
         WITH RECURSIVE dates(d) AS (
@@ -67,16 +75,19 @@ class DateAllocator:
         ORDER BY 
             CASE 
                 WHEN d.d = ? THEN 0 
-                WHEN d.d < ? THEN {past_priority} 
+                WHEN d.d < ? THEN 1 
                 ELSE 2 
             END ASC,
-            d.d ASC
+            {secondary_sort}
         LIMIT 100;
         """
 
         with self.state._conn as conn:
-            # Query uses 5 placeholders: start_date, today+365, daily_target, today (priority), today (priority)
-            cursor = conn.execute(query, (start_date, today, daily_target, today, today))
+            params = [start_date, today, daily_target, today, today]
+            if fill_strategy == "today":
+                params.append(today)
+
+            cursor = conn.execute(query, params)
             rows = cursor.fetchall()
 
             for date_str, db_count in rows:
@@ -113,7 +124,14 @@ class DateAllocator:
         today = get_today()
         fill_strategy = self.state.get_config("fill_strategy") or "start_date"
         
-        past_priority = 1 if fill_strategy == "start_date" else 3
+        secondary_sort = "d.d ASC"
+        if fill_strategy == "today":
+            secondary_sort = """
+            CASE 
+                WHEN d.d < ? THEN -julianday(d.d)
+                ELSE julianday(d.d)
+            END ASC
+            """
 
         # We start with the guaranteed "Context Rows" (Today).
         res_dates = [today]
@@ -135,18 +153,19 @@ class DateAllocator:
         ORDER BY 
             CASE 
                 WHEN d.d = ? THEN 0 
-                WHEN d.d < ? THEN {past_priority} 
+                WHEN d.d < ? THEN 1 
                 ELSE 2 
             END ASC,
-            d.d ASC
+            {secondary_sort}
         LIMIT 10;
         """
 
         with self.state._conn as conn:
-            # Query uses 5 placeholders: start_date, today+365, target, today (priority), today (priority)
-            cursor = conn.execute(
-                query, (start_date, today, daily_target, today, today)
-                )
+            params = [start_date, today, daily_target, today, today]
+            if fill_strategy == "today":
+                params.append(today)
+
+            cursor = conn.execute(query, params)
             rows = cursor.fetchall()
             next_dates = [row[0] for row in rows]
 

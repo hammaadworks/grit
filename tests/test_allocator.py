@@ -57,7 +57,7 @@ def test_allocator_config_change_invalidates_memo(db, mocker):
     assert next_date == "2024-01-03"
 
 def test_allocator_fill_strategy_today(db, mocker):
-    """If fill_strategy is 'today', it should prioritize today, then future, then past."""
+    """If fill_strategy is 'today', it should prioritize today, then past (DESC), then future."""
     mocker.patch('grit.allocator.get_today', return_value="2024-01-04")
     
     db.set_config("start_date", "2024-01-01")
@@ -72,8 +72,8 @@ def test_allocator_fill_strategy_today(db, mocker):
     allocator = DateAllocator(db)
     next_date = allocator.get_next_date()
     
-    # Priority: 2024-01-04 (full) -> 2024-01-05 (empty, priority 2) -> 2024-01-02 (empty, priority 3)
-    assert next_date == "2024-01-05"
+    # Priority: 2024-01-04 (full) -> 2024-01-02 (empty, priority 1) -> 2024-01-05 (empty, priority 2)
+    assert next_date == "2024-01-02"
 
 def test_get_status_allocations(db, mocker):
     """Test get_status_allocations returns correct structure."""
