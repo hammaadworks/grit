@@ -9,26 +9,26 @@ import { DIAGRAMS } from "@/lib/diagrams";
 
 const STEPS = [
   {
-    title: "DevX Wizard",
-    description: "Launch an interactive TUI to pick files and let AI auto-generate your Conventional Commits.",
+    title: "CommitScribe Analysis",
+    description: "Launch the high-fidelity wizard to pick files and let Pydantic AI generate architectural commit messages.",
     icon: GitBranch,
     color: "text-blue-400"
   },
   {
-    title: "O(1) Allocation",
-    description: "A single Recursive SQL query finds the most recent open date matching your target to fix streaks.",
+    title: "O(1) SQL Allocation",
+    description: "Recursive CTEs find the optimal author date in under 1ms to perfectly preserve your GitHub streak.",
     icon: Database,
     color: "text-teal-400"
   },
   {
-    title: "Quantum Undo",
-    description: "Made a mistake? Safely reset your work and automatically decrement the database count.",
+    title: "Atomic State",
+    description: "Grit ensures database integrity by incrementing commit counts only after a successful git exit code.",
     icon: Cpu,
     color: "text-purple-400"
   },
   {
-    title: "Smart Push",
-    description: "Grit prompts you to push, detects rejections, and handles automatic pull-rebasing.",
+    title: "Self-Healing Sync",
+    description: "Automatically reconcile local state with GitHub graph data using professional Loguru diagnostics.",
     icon: CheckCircle2,
     color: "text-green-400"
   }

@@ -9,23 +9,23 @@ import { motion } from "framer-motion";
 const FEATURES: Feature[] = [
   {
     icon: Shield,
-    title: "Atomic Integrity",
-    description: "Commit counts increment ONLY on success. No false positives, no corrupted history."
+    title: "CommitScribe AI",
+    description: "Architectural commit messages powered by Pydantic AI. Wise, structured, and deep."
   },
   {
     icon: Zap,
     title: "Recursive SQL",
-    description: "SQLite CTEs find dates in under 1ms. No Python loops, just raw database speed."
+    description: "Atomic O(1) date allocation via SQLite CTEs. High-velocity history management."
   },
   {
     icon: GitGraph,
-    title: "Visual Logging",
-    description: "A beautifully enhanced, human-readable git log on jetpack rollerskates."
+    title: "Professional Logs",
+    description: "Loguru-powered internal diagnostics with automatic rotation and background compression."
   },
   {
     icon: BookOpen,
     title: "Open Architecture",
-    description: "Built with Python 3.10+, Typer, and Rich. Clean, typed, and easy to audit or extend."
+    description: "Built for the agentic era with transparent technical snapshots and technical wisdom."
   }
 ];
 

@@ -34,14 +34,14 @@ export function AINative() {
           <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-8 shadow-inner">
             <Cpu className="text-primary w-7 h-7" />
           </div>
-          <Heading level={2} className="mb-6">AI-Native Context</Heading>
+          <Heading level={2} className="mb-6">CommitScribe AI Intelligence</Heading>
           <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-            Grit is built for the agentic era. We maintain a high-density technical snapshot designed to bootstrap any AI agent with perfect context in seconds.
+            Grit is architected for the agentic era. Powered by <strong>Pydantic AI</strong>, our built-in agent <strong>CommitScribe</strong> analyzes your diffs to generate wise, high-fidelity commit messages with architectural rationale.
           </p>
           
           <div className="space-y-6 mb-10">
-            <FeatureItem title="Zero Hallucination" desc="Technical invariants ensure AI-generated code follows our SQLite-first rules." />
-            <FeatureItem title="Instant Bootstrapping" desc="Copy the LLM context directly from here or link to the raw file." />
+            <FeatureItem title="Architectural Wisdom" desc="CommitScribe explains the rationale, impact, and future implications of every change." />
+            <FeatureItem title="Structured Integrity" desc="Enforced by Pydantic AI for type-safe, non-ambiguous, and professional commit logs." />
           </div>
 
           <div className="flex flex-wrap gap-4">

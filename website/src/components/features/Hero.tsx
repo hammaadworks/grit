@@ -35,7 +35,7 @@ export function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <Heading level={1} className="mb-8 max-w-4xl mx-auto">
+        <Heading level={1} className="mb-8 max-w-4xl mx-auto leading-tight">
           Your GitHub streak? <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-teal-400 to-emerald-400">
             Consider it unbreakable.
@@ -49,7 +49,7 @@ export function Hero() {
         transition={{ delay: 0.2 }}
         className="text-lg sm:text-xl text-muted-foreground max-w-3xl mb-12 leading-relaxed font-medium"
       >
-        That gut punch when you see a gap in your GitHub streak, despite all your hard work? Grit feels it too. We're your silent companion, seamlessly weaving your real commits into those empty spaces. Reclaim your peace of mind, own your effort, and feel the joy of a perfectly green contribution graph—effortlessly.
+        Grit is a professional, high-fidelity git wrapper that intelligently distributes your commits to maintain a consistent contribution graph. Featuring <strong>CommitScribe AI</strong>, we generate architectural, CTO-level commit messages while keeping your daily goals perfectly on track.
       </motion.p>
 
       <motion.div

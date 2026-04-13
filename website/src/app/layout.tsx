@@ -1,13 +1,35 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Header, Footer } from "@/components/layout/Navigation";
-import Image from "next/image"; // Import Image component
 
 export const metadata: Metadata = {
-  title: "Grit | The Intelligent Git Wrapper",
-  description: "Keep your GitHub graph perfectly consistent with a unified backdated history.",
-  icons: {
-    icon: "/favicon.svg",
+  title: "Grit | CommitScribe AI - The Intelligent Git Wrapper",
+  description: "Keep your GitHub streak unbreakable with CommitScribe AI. Architected for professional developers who value consistency and high-fidelity commit history.",
+  keywords: ["git wrapper", "github streak", "commit history", "ai commit message", "CommitScribe", "git automation", "backdated commits"],
+  authors: [{ name: "hammaadworks" }],
+  openGraph: {
+    title: "Grit | CommitScribe AI",
+    description: "The intelligent git wrapper for professional developers.",
+    url: "https://grit.dev",
+    siteName: "Grit",
+    images: [
+      {
+        url: "/assets/logo.svg",
+        width: 1200,
+        height: 630,
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Grit | CommitScribe AI",
+    description: "Keep your GitHub streak unbreakable with CommitScribe AI.",
+    images: ["/assets/logo.svg"],
+  },
+  alternates: {
+    canonical: "https://grit.dev",
   },
 };
 
@@ -16,8 +38,30 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Grit",
+    "operatingSystem": "Linux, macOS, Windows",
+    "applicationCategory": "DeveloperApplication",
+    "description": "An intelligent git wrapper that uses CommitScribe AI to maintain a consistent contribution graph.",
+    "softwareVersion": "0.0.1",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  };
+
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM Context" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body className="min-h-screen bg-background text-foreground selection:bg-primary/30">
         <Header />
         <div className="pt-16">
