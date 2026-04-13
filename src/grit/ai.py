@@ -1,93 +1,214 @@
-import httpx
+import os
 import json
-from typing import Optional
+import re
+from typing import List, Optional
 
-def generate_commit_message(diff: str, base_url: str, api_key: str, model: str, verbose: bool = False) -> Optional[str]:
-    """
-    Calls an LLM endpoint (Ollama, Claude, OpenAI, etc.) to generate a perfect Conventional Commit message.
-    """
-    if not api_key or not base_url or not diff.strip():
-        return None
+from loguru import logger
+from pydantic import BaseModel, ValidationError
+from pydantic_ai import Agent
 
-    # Command-style prompt engineered for maximum precision on small/distilled models.
-    system_prompt = (
-        "TASK: Generate a professional Git Commit message in Conventional Commits format.\n"
-        "INPUT: A git diff of changes.\n"
-        "OUTPUT: ONLY the commit message. NO conversation. NO preamble. NO 'Here is the message'.\n\n"
-        "FORMAT RULES:\n"
-        "1. Header: <type>(<scope>): <subject>\n"
-        "2. Types: feat, fix, refactor, docs, style, test, chore, perf, build, ci.\n"
-        "3. Subject: Imperative ('add' not 'added'), present tense, max 50 chars, no period.\n"
-        "4. Body: Leave one blank line after header. Explain 'why' and 'what', not 'how'.\n\n"
-        "EXAMPLES:\n"
-        "feat(auth): add JWT refresh token support\n\n"
-        "Implemented a rotating refresh token strategy to improve session security\n"
-        "without forcing frequent re-logins.\n\n"
-        "fix(api): handle null pointer in user profile lookup\n\n"
-        "Resolved a crash occurring when fetching profiles for deactivated users\n"
-        "by adding a non-null guard in the repository layer.\n\n"
-        "STRICT: If you output anything other than the raw commit message, the system will fail."
-    )
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+# =========================
+# Schema
+# =========================
+class CommitMessage(BaseModel):
+    type: str
+    scope: str
+    message: str
+    body: List[str]
 
-    # Format standard LLM payload (Supported by Ollama, Anthropic/Claude, OpenAI, etc.)
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Here is the diff:\n\n{diff}"}
-        ],
-        "temperature": 0.1,
-        "max_tokens": 500
-    }
 
-    if verbose:
-        from grit.ui import console, BRAND_COLOR
-        console.print(f"\n[bold {BRAND_COLOR}]--- AI Debug Info ---[/bold {BRAND_COLOR}]")
-        console.print(f"[bold]URL:[/bold] {base_url.rstrip('/')}/chat/completions")
-        console.print(f"[bold]Model:[/bold] {model}")
-        console.print(f"[bold]Payload:[/bold]\n{json.dumps(payload, indent=2)}")
+# =========================
+# Repair Layer
+# =========================
+def _indestructible_surgical_repair(text: str) -> str:
+    text = "".join(c for c in text if ord(c) >= 32 or c in "\n\r\t")
+
+    match = re.search(r"(\{.*\})", text, re.DOTALL)
+    if not match:
+        return text
+
+    raw = match.group(1).strip()
+
+    raw = re.sub(r',(\s*[}\]])', r'\1', raw)
+    raw = re.sub(r'([{,]\s*)(\w+):', r'\1"\2":', raw)
+    raw = raw.replace("'", '"')
 
     try:
-        url = f"{base_url.rstrip('/')}/chat/completions"
-        # Increased timeout to 60.0s to allow for local model cold-starts
-        with httpx.Client(timeout=60.0) as client:
-            response = client.post(url, json=payload, headers=headers)
-            
-            if verbose:
-                console.print(f"\n[bold]Response Status:[/bold] {response.status_code}")
-                console.print(f"[bold]Response Body:[/bold]\n{response.text}")
-                
-            response.raise_for_status()
-            
-            data = response.json()
-            if "choices" in data and len(data["choices"]) > 0:
-                choice = data["choices"][0]
-                message = choice.get("message", {})
-                msg = message.get("content", "")
-                
-                # Fallback for models that output primarily in reasoning (common in some distilled models)
-                if not msg.strip() and "reasoning" in message:
-                    msg = message["reasoning"]
-                
-                msg = msg.strip()
-                if not msg:
-                    return None
+        data = json.loads(raw)
 
-                # Strip markdown code blocks just in case the LLM disobeys
-                if msg.startswith("```"):
-                    lines = msg.split("\n")
-                    if len(lines) > 2:
-                        msg = "\n".join(lines[1:-1])
-                return msg
-    except Exception as e:
-        # Import internally to avoid circular dependencies
-        from grit.ui import err_console, ERROR_COLOR
-        err_console.print(f"\n    [{ERROR_COLOR}]AI Error: {str(e)}[/{ERROR_COLOR}]")
+        if isinstance(data, dict) and "type" not in data:
+            for v in data.values():
+                if isinstance(v, dict) and "type" in v:
+                    data = v
+                    break
+
+        if not isinstance(data, dict):
+            raise ValueError("Not dict")
+
+        if not all(k in data for k in ["type", "scope", "message", "body"]):
+            raise ValueError("Missing keys")
+
+        if not isinstance(data["body"], list):
+            data["body"] = [str(data["body"])]
+
+        return json.dumps(data)
+
+    except Exception:
+        obj = {}
+
+        for key in ["type", "scope", "message"]:
+            m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', raw)
+            if m:
+                obj[key] = m.group(1)
+
+        m_body = re.search(r'"body"\s*:\s*\[(.*?)\]', raw, re.DOTALL)
+        if m_body:
+            items = re.findall(r'"([^"]+)"', m_body.group(1))
+            if items:
+                obj["body"] = items
+
+        if all(k in obj for k in ["type", "scope", "message"]):
+            obj.setdefault("body", ["Recovered insight."])
+            return json.dumps(obj)
+
+    return raw
+
+
+# =========================
+# Main Generator
+# =========================
+def generate_commit_message(
+    diff: str,
+    base_url: str,
+    api_key: str,
+    model_name: str,
+    verbose: bool = False,
+) -> Optional[str]:
+
+    if not diff.strip():
+        logger.error("Empty diff.")
         return None
-        
-    return None
+
+    clean_url = None if base_url in ["Not configured", ""] else base_url
+    clean_key = None if api_key in ["Not configured", ""] else api_key
+
+    provider_prefix = "ollama" if clean_url and "11434" in clean_url else "openai"
+    full_model_string = f"{provider_prefix}:{model_name}"
+
+    # =========================
+    # ENV (RESTORED + OPTIMIZED)
+    # =========================
+    env_vars = {}
+
+    if provider_prefix == "ollama":
+        env_vars.update({
+            "OLLAMA_API_KEY": clean_key or "ollama",
+            "OLLAMA_NUM_CTX": "2048",
+            "OLLAMA_NUM_PREDICT": "128",
+            "OLLAMA_NUM_GPU": "1",
+            "OLLAMA_NUM_THREAD": "4",
+            "OLLAMA_KEEP_ALIVE": "5m",
+            "OLLAMA_MAX_LOADED_MODELS": "1",
+        })
+
+        if clean_url:
+            env_vars["OLLAMA_BASE_URL"] = clean_url
+
+    original_env = {k: os.environ.get(k) for k in env_vars}
+    os.environ.update(env_vars)
+
+    try:
+        from grit.executor import get_staged_files
+
+        staged_files = get_staged_files()
+        files_list = "\n".join(f"- {f}" for f in staged_files)
+
+        instructions = """
+You are NOT a chatbot.
+You are a strict JSON generator.
+Output ONLY valid JSON.
+"""
+
+        agent = Agent(
+            full_model_string,
+            instructions=instructions,
+        )
+
+        last_error = None
+
+        try:
+            summary_prompt = f"Summarize this git diff in 1 concise sentence:\n{diff}"
+            diff_summary = agent.run_sync(summary_prompt).output.strip()
+        except Exception:
+            diff_summary = diff[:500]
+
+        for attempt in range(4):
+            try:
+                prompt = f"""
+FILES:
+{files_list}
+
+SUMMARY:
+{diff_summary}
+
+Respond with EXACTLY this JSON structure:
+
+{{
+  "type": "...",
+  "scope": "...",
+  "message": "...",
+  "body": ["...", "..."]
+}}
+
+Rules:
+- No extra keys
+- No comments
+- No trailing text
+- body MUST be array of strings
+- Output ONLY JSON
+
+Now produce the JSON:
+"""
+
+                if last_error:
+                    prompt += f"\nFix previous error:\n{last_error}\n"
+
+                # =========================
+                # PREFILL JSON (Point 3)
+                # =========================
+                prompt += '\n{\n  "type": "'
+
+                result = agent.run_sync(prompt)
+                raw_output = result.output.strip()
+
+                if verbose:
+                    logger.debug(f"RAW:\n{raw_output}")
+
+                if not raw_output.startswith("{"):
+                    raise ValueError("Did not start with JSON")
+
+                if '"code"' in raw_output.lower():
+                    raise ValueError("Model returned code")
+
+                clean_json = _indestructible_surgical_repair(raw_output)
+
+                msg_obj = CommitMessage.model_validate_json(clean_json)
+
+                header = f"{msg_obj.type}({msg_obj.scope}): {msg_obj.message}"
+                body = "\n".join(f"- {b}" for b in msg_obj.body)
+
+                return f"{header}\n\n{body}"
+
+            except (ValidationError, Exception) as e:
+                last_error = str(e)
+                logger.warning(f"Attempt {attempt+1} failed: {e}")
+
+        return None
+
+    finally:
+        for k, v in original_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
