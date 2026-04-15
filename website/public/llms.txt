@@ -1,0 +1,21 @@
+# Grit AI Context (CommitScribe)
+
+Grit is a professional CLI utility that intelligently distributes git commits to maintain a consistent contribution graph. It features **CommitScribe**, an AI agent powered by Pydantic AI, for high-fidelity commit message generation.
+
+## 🛠 TechnicalDNA
+- **Stack:** Python, Typer, Rich, SQLite, Pydantic AI, Loguru.
+- **Architectural Principle:** SQLite-first state, never JSON/YAML for logic.
+- **Core Algorithm:** O(1) SQL-based date allocation via Recursive CTE.
+- **Logging:** Professional Loguru-based system with background rotation.
+
+## 📖 Key Documentation
+- User Guide: https://grit.dev/docs/user-guide
+- Developer Guide: https://grit.dev/docs/developer-guide
+- GitHub: https://github.com/hammaadworks/grit
+
+## ⚡ Core Commands
+- `grit config`: Initial setup and target management.
+- `grit commit`: Interactive wizard with CommitScribe AI analysis.
+- `grit status`: Intelligence dashboard and future pipeline view.
+- `grit sync`: Multi-source (Local/Remote) state reconciliation.
+- `grit spread`: Historical redistributor for gap-filling.
