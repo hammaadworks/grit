@@ -50,6 +50,17 @@ class TestUI(unittest.TestCase):
 
     @patch('grit.ui.get_key')
     @patch('grit.ui.Live')
+    def test_text_input_with_timeout(self, mock_live, mock_get_key):
+        # Simulate: timeout twice (None), type "a", then Ctrl+D
+        mock_get_key.side_effect = [None, None, 'a', '\x04']
+        
+        result = run_text_input("Title")
+        self.assertEqual(result, "a")
+        # Ensure get_key was called with timeout
+        self.assertEqual(mock_get_key.call_args[1].get('timeout'), 0.1)
+
+    @patch('grit.ui.get_key')
+    @patch('grit.ui.Live')
     def test_selection_menu_abort(self, mock_live, mock_get_key):
         # Simulate: Q
         mock_get_key.side_effect = ['q']
@@ -59,6 +70,13 @@ class TestUI(unittest.TestCase):
         
         self.assertIsNone(choice)
         self.assertEqual(idx, -1)
+
+    @patch('sys.stdout.write')
+    def test_reset_terminal_title(self, mock_write):
+        from grit.ui import reset_terminal_title
+        with patch('sys.stdout.isatty', return_value=True):
+            reset_terminal_title()
+            mock_write.assert_called_with("\033]0;\007")
 
     @patch('grit.ui.Live')
     @patch('random.random', return_value=0.9)

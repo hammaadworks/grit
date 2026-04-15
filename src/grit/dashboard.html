@@ -53,7 +53,7 @@
 
         .main-content {
             margin-left: 280px;
-            padding: 64px;
+            padding: 40px 64px;
             max-width: 1400px;
         }
 
@@ -62,9 +62,10 @@
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 32px;
+            padding: 24px; /* Reduced padding to prevent cutoff */
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
+            overflow: hidden; /* Prevent spillover */
         }
         .bento-card:hover {
             border-color: #1a4d4d;
@@ -73,7 +74,12 @@
 
         /* Typography Presets */
         .h1 { font-weight: 900; font-size: 2.5rem; tracking: -0.05em; color: var(--text-main); }
-        .stat-value { font-weight: 800; font-size: 3.5rem; letter-spacing: -0.04em; }
+        .stat-value { 
+            font-weight: 800; 
+            font-size: 2.25rem; /* Reduced from 3.5rem to prevent cutoff */
+            letter-spacing: -0.04em;
+            line-height: 1;
+        }
         .label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); }
 
         /* Contribution Map 5.0 (Strict GitHub Colors) */
@@ -234,14 +240,10 @@
 
     <div id="tab-intelligence">
         <!-- Header Section -->
-        <header class="mb-16">
+        <header class="mb-12">
             <h1 class="h1">Intelligence Center</h1>
             <p class="text-lg text-[#94a3b8] mt-2 font-medium">Real-time commit
                 distribution and graph optimization analysis.</p>
-
-            <!-- The "Fun" Rule Media Asset -->
-            <img src="https://media.tenor.com/bK1RAdR_iP4AAAAC/dog-coding.gif"
-                 alt="Coding Intensity" class="hero-image">
         </header>
 
         <!-- Metrics Row -->
@@ -540,8 +542,13 @@
             header.innerHTML = '';
             body.innerHTML = '';
 
-            if (rows.length > 0 || table) {
-                const cols = table === 'config' ? ['key', 'value'] : ['date', 'count'];
+            if (rows.length > 0) {
+                // Dynamically determine columns based on the first row's length or hardcoded if empty
+                let cols = [];
+                if (table === 'config') cols = ['key', 'value'];
+                else if (table === 'commits') cols = ['date', 'count'];
+                else if (table === 'drafts') cols = ['diff_hash', 'message', 'timestamp'];
+                
                 cols.forEach(col => {
                     const th = document.createElement('th');
                     th.className = 'py-4 px-2';
@@ -558,7 +565,7 @@
                     tr.className = 'border-b border-[#133838]/30 hover:bg-white/[0.02] transition-colors';
                     row.forEach((cell, idx) => {
                         const td = document.createElement('td');
-                        td.className = 'py-4 px-2 text-white font-medium';
+                        td.className = 'py-4 px-2 text-white font-medium break-all max-w-xs';
                         td.textContent = cell;
                         tr.appendChild(td);
                     });
@@ -587,7 +594,11 @@
 
     async function editRow(table, row) {
         const newValues = [];
-        const cols = table === 'config' ? ['key', 'value'] : ['date', 'count'];
+        let cols = [];
+        if (table === 'config') cols = ['key', 'value'];
+        else if (table === 'commits') cols = ['date', 'count'];
+        else if (table === 'drafts') cols = ['diff_hash', 'message', 'timestamp'];
+
         for (let i = 0; i < row.length; i++) {
             const val = prompt(`Enter new value for ${cols[i]}:`, row[i]);
             if (val === null) return;
@@ -621,7 +632,11 @@
     async function addRow() {
         if (!selectedTable) return alert('Select a table first');
         const row = [];
-        const cols = selectedTable === 'config' ? ['key', 'value'] : ['date', 'count'];
+        let cols = [];
+        if (selectedTable === 'config') cols = ['key', 'value'];
+        else if (selectedTable === 'commits') cols = ['date', 'count'];
+        else if (selectedTable === 'drafts') cols = ['diff_hash', 'message', 'timestamp'];
+
         for (const col of cols) {
             const val = prompt(`Enter ${col}:`);
             if (val === null) return;

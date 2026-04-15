@@ -124,16 +124,28 @@ def get_staged_files() -> list[str]:
 
 def get_staged_diff() -> str:
     """Returns a sanitized diff of currently staged files for AI context."""
+    from grit.constants import AI_FILE_EXCLUDE
+    
     try:
+        # Build exclusion pathspecs: :(exclude)*.lock :(exclude)*.toml etc.
+        exclude_args = [f":(exclude){pattern}" for pattern in AI_FILE_EXCLUDE]
+        
         # Use --no-prefix and --unified=3 to keep it concise
+        cmd = ["git", "diff", "--staged", "--no-color", "--no-prefix", "--"] + exclude_args
+        
         result = subprocess.run(
-            ["git", "diff", "--staged", "--no-color", "--no-prefix"],
+            cmd,
             capture_output=True,
             text=True
         )
         return _sanitize_diff(result.stdout)
     except Exception:
         return ""
+
+def get_diff_hash(diff: str) -> str:
+    """Returns a SHA-256 hash of the diff string for caching purposes."""
+    import hashlib
+    return hashlib.sha256(diff.encode('utf-8')).hexdigest()
 
 def _sanitize_diff(raw_diff: str) -> str:
     """
@@ -192,6 +204,11 @@ def execute_git_commit(args: list[str], target_date: str, state: StateManager) -
     env = os.environ.copy()
     env["GIT_AUTHOR_DATE"] = timestamp
     env["GIT_COMMITTER_DATE"] = timestamp
+    
+    # Inject custom editor if configured
+    editor_command = state.get_config("editor_command")
+    if editor_command:
+        env["GIT_EDITOR"] = editor_command
     
     result = subprocess.run(["git", "commit"] + args, env=env)
     

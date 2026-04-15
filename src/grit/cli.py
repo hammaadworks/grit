@@ -248,6 +248,9 @@ def dashboard(
         if "grit" in sys.argv[0] or "pytest" not in sys.argv[0]:
             cmd = [sys.argv[0], "dashboard", "--port", str(port), "--logs"]
 
+        from grit.ui import suppress_title_reset
+        suppress_title_reset()
+
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
@@ -274,6 +277,9 @@ def commit(
         verbose: Annotated[
             bool, typer.Option("--verbose", "-v", help="Show AI interaction logs")
         ] = False,
+        ai: Annotated[
+            bool, typer.Option("--ai", "-a", help="Run AI generation in the background and notify when ready")
+        ] = False,
         logs: Annotated[
             bool, typer.Option("--logs", help="Enable detailed system logs for debugging")
         ] = False
@@ -285,7 +291,74 @@ def commit(
     """
     if logs:
         setup_logger(verbose=True)
-    run_commit(state, ctx, verbose=verbose)
+    run_commit(state, ctx, verbose=verbose, ai=ai)
+
+
+@app.command(hidden=True)
+def _ai_internal(
+    diff_path: str,
+    diff_hash: str,
+    verbose: bool = False
+):
+    """Internal command for background AI generation. Do not call manually."""
+    import sys
+    import time
+    from pathlib import Path
+    from grit.state import DEFAULT_DB_DIR
+    
+    # CRITICAL: Redirect stdout/stderr to log file immediately to prevent EIO errors
+    # in Electron/VSCode terminals when the parent process exits.
+    log_file = DEFAULT_DB_DIR / "ai_background.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    log_stream = open(log_file, "a", buffering=1) # Line buffered
+    sys.stdout = log_stream
+    sys.stderr = log_stream
+
+    def log(msg):
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+
+    log(f"Starting background generation for diff {diff_hash[:8]}...")
+    
+    from grit.ai import generate_commit_message
+    from grit.state import StateManager
+    import subprocess
+
+    state = StateManager()
+    ai_key = state.get_config("ai_api_key")
+    ai_url = state.get_config("ai_base_url")
+    ai_model = state.get_config("ai_model")
+
+    try:
+        diff = Path(diff_path).read_text(encoding="utf-8")
+        log(f"Read diff ({len(diff)} chars). Calling LLM ({ai_model})...")
+        
+        msg = generate_commit_message(diff, ai_url, ai_key, ai_model, verbose)
+        
+        if msg:
+            state.set_draft(diff_hash, msg)
+            log("Success! Draft saved to database.")
+            # Notify on macOS
+            try:
+                subprocess.run([
+                    "osascript", 
+                    "-e", 
+                    f'display notification "✨ AI draft is ready for your commit!" with title "Grit AI"'
+                ], check=False)
+            except Exception as ne:
+                log(f"Notification failed: {ne}")
+        else:
+            log("LLM returned empty message or failed.")
+    except Exception as e:
+        log(f"CRITICAL ERROR: {e}")
+    finally:
+        # Cleanup temp diff file
+        try:
+            Path(diff_path).unlink(missing_ok=True)
+            log("Cleaned up temporary diff file.")
+        except:
+            pass
+        log_stream.close()
 
 
 @app.command(
@@ -348,12 +421,14 @@ def info():
              ("-s, --start [date]", "Define the timeline start boundary (YYYY-MM-DD)."),
              ("-u, --username [str]",
               "Link your GitHub identity for graph synchronization."),
-             ("-f, --fill-from [str]", "Allocation strategy: 'today' or 'start_date'.")
+             ("-f, --fill-from [str]", "Allocation strategy: 'today' or 'start_date'."),
+             ("Editor: Command", "Set your preferred editor (e.g., 'code --wait').")
          ]),
         ("commit",
          "The core wrapper for `git commit`. Run without arguments for the "
          "Interactive AI Wizard.",
          [
+             ("--ai, -a", "Background AI generation and notify when draft is ready."),
              ("[standard git flags]",
               "All native git arguments are passed through transparently."),
              ("--amend",
@@ -421,6 +496,18 @@ def info():
                 )
             console.print(Padding(flag_table, (0, 6)))
         console.print()
+
+    # Add Tips & Tricks section
+    console.print(
+        Padding(Text("TIPS & TRICKS", style=f"bold {ACCENT_COLOR}"), (1, 2, 0, 2))
+    )
+    tips = [
+        ("Background AI", "Use `grit commit --ai` to background the LLM. Monitor it with: `tail -f ~/.config/grit/ai_background.log`"),
+        ("Draft Caching", "Grit hashes your diff. If you've generated a message before, it loads instantly from the 50-entry FIFO cache."),
+        ("Custom Editor", "Set 'Editor: Command' in config to skip Vim. Use 'code --wait' for VS Code or 'open -e' for TextEdit."),
+    ]
+    for tip_title, tip_desc in tips:
+        console.print(Padding(f"✦ [bold white]{tip_title}[/bold white]: {tip_desc}", (0, 4, 1, 4)))
 
 
 @app.command()

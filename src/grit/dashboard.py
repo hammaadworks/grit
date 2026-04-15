@@ -47,7 +47,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
             query = parse_qs(urlparse(self.path).query)
             table = query.get('table', [None])[0]
-            if table in ['config', 'commits']:
+            if table in ['config', 'commits', 'drafts']:
                 cursor = self.state._conn.execute(f"SELECT * FROM {table}")
                 rows = cursor.fetchall()
                 self.send_json(rows)
@@ -112,6 +112,12 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     self.state.set_config(row[0], row[1])
                 elif table == 'commits':
                     self.state.set_commit_count(row[0], int(row[1]))
+                elif table == 'drafts':
+                    with self.state._conn as conn:
+                        conn.execute(
+                            "INSERT OR REPLACE INTO drafts (diff_hash, message, timestamp) VALUES (?, ?, ?)",
+                            (row[0], row[1], row[2])
+                        )
                 else:
                     raise Exception("Invalid table")
 
@@ -133,6 +139,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                         conn.execute("DELETE FROM config WHERE key = ?", (pk,))
                     elif table == 'commits':
                         conn.execute("DELETE FROM commits WHERE date = ?", (pk,))
+                    elif table == 'drafts':
+                        conn.execute("DELETE FROM drafts WHERE diff_hash = ?", (pk,))
                     else:
                         raise Exception("Invalid table")
 

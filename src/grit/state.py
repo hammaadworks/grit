@@ -34,6 +34,56 @@ class StateManager:
                                 )
                             '''
                 )
+            self._conn.execute(
+                '''
+                                CREATE TABLE IF NOT EXISTS drafts (
+                                    diff_hash TEXT PRIMARY KEY,
+                                    message TEXT,
+                                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                                )
+                            '''
+                )
+
+    def get_draft(self, diff_hash: str) -> Optional[str]:
+        """Retrieve a cached commit draft for a specific diff."""
+        cursor = self._conn.execute('SELECT message FROM drafts WHERE diff_hash = ?', (diff_hash,))
+        row = cursor.fetchone()
+        return row[0] if row else None
+
+    def get_all_drafts(self) -> list[tuple]:
+        """Retrieve all cached commit drafts."""
+        cursor = self._conn.execute('SELECT diff_hash, message, timestamp FROM drafts ORDER BY timestamp DESC')
+        return cursor.fetchall()
+
+    def set_draft(self, diff_hash: str, message: str):
+        """Cache a commit draft for a specific diff. Enforces a 50-entry FIFO limit."""
+        with self._conn:
+            # 1. Insert/Update the new draft
+            self._conn.execute(
+                '''
+                                INSERT INTO drafts (diff_hash, message, timestamp)
+                                VALUES (?, ?, CURRENT_TIMESTAMP)
+                                ON CONFLICT(diff_hash) DO UPDATE SET message=excluded.message, timestamp=excluded.timestamp
+                            ''', (diff_hash, message)
+                )
+            
+            # 2. Enforce 50-entry limit (FIFO)
+            # Delete entries that are NOT in the top 50 most recent
+            self._conn.execute(
+                '''
+                DELETE FROM drafts 
+                WHERE diff_hash NOT IN (
+                    SELECT diff_hash FROM drafts 
+                    ORDER BY timestamp DESC 
+                    LIMIT 50
+                )
+                '''
+            )
+
+    def clear_old_drafts(self, hours: int = 24):
+        """Cleanup old drafts to keep the DB lean."""
+        with self._conn:
+            self._conn.execute("DELETE FROM drafts WHERE timestamp < datetime('now', ?)", (f'-{hours} hours',))
 
     def get_config(self, key: str) -> Optional[str]:
         """Retrieve a configuration value by key."""

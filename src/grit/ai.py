@@ -50,13 +50,13 @@ def generate_commit_message(
     if provider_prefix == "ollama":
         env_vars.update({
             "OLLAMA_API_KEY": clean_key or "ollama",
-            "OLLAMA_NUM_CTX": "2048",
-            "OLLAMA_NUM_PREDICT": "128",
-            "OLLAMA_NUM_GPU": "1",
-            "OLLAMA_NUM_THREAD": "4",
-            "OLLAMA_KEEP_ALIVE": "5m",
+            "OLLAMA_NUM_CTX": "4096", # Increased context for larger diffs
+            "OLLAMA_NUM_PREDICT": "256", # Enough for header + body
+            "OLLAMA_NUM_GPU": "1", # Use Metal on Mac
+            "OLLAMA_KEEP_ALIVE": "10m", # Keep in memory longer for back-to-back commits
             "OLLAMA_MAX_LOADED_MODELS": "1",
         })
+        # Removed hardcoded OLLAMA_NUM_THREAD to let Ollama auto-optimize for M1/M2/M3
 
         if clean_url:
             env_vars["OLLAMA_BASE_URL"] = clean_url
@@ -77,7 +77,7 @@ def generate_commit_message(
 
         instructions = (
             "You are a Distinguished System Architect creating high-fidelity Conventional Commit messages.\n"
-            "Analyze the summary, diff, and staged files to create a commit message that reflects technical wisdom.\n"
+            "Analyze the staged files and the diff to create a commit message that reflects technical wisdom.\n"
             "The message must be structured, professional, and explain the WHY behind the changes.\n"
             "Respond ONLY with the requested structured output."
         )
@@ -86,33 +86,20 @@ def generate_commit_message(
             full_model_string,
             output_type=CommitMessage,
             instructions=instructions,
-            retries=3,
+            retries=2, # Reduced retries to save time on slow models
         )
-
-        try:
-            summary_agent = Agent(
-                full_model_string,
-                instructions="Summarize this git diff in 1 concise sentence."
-            )
-            summary_prompt = f"Diff:\n{diff}"
-            diff_summary = summary_agent.run_sync(summary_prompt).output.strip()
-        except Exception as e:
-            if verbose:
-                logger.debug(f"Summary agent failed: {e}")
-            diff_summary = diff[:500]
 
         prompt = f"""
 STAGED FILES:
 {files_list}
 
-DIFF SUMMARY:
-{diff_summary}
-
 RAW DIFF:
-{diff[:2000]}
+{diff[:4000]}
 
 Generate a Conventional Commit message. 
 The 'type' MUST be one of: feat, fix, docs, style, refactor, test, chore.
+The 'scope' should be the primary module or component affected.
+The 'message' should be a high-level summary.
 The 'body' MUST be a list of strings explaining rationale and impact.
 """
 
