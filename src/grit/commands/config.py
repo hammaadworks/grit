@@ -34,6 +34,9 @@ def run_config_interactive(state: StateManager):
     Grit Control Center: High-fidelity interactive settings management.
     Navigate with arrow keys, edit with Enter, and save with S.
     """
+    from grit.ui import set_terminal_title
+    set_terminal_title("Grit — Configuration")
+
     # Interactive Settings Schema
     options = [
         {"id": "target", "title": "Daily Commit Target *",
@@ -58,6 +61,9 @@ def run_config_interactive(state: StateManager):
         {"id": "ai_model", "title": "AI: Model Name",
          "desc": "The model to use (e.g. llama3 for Ollama, claude-3-haiku-20240307).",
          "key": "ai_model", "default": "Not configured"},
+        {"id": "editor", "title": "Editor: Command",
+         "desc": "Command to open your preferred graphical editor (e.g., 'code --wait', 'subl -w', 'atom -w', 'nano').",
+         "key": "editor_command", "default": ""},
     ]
 
     # Session State: Load everything into memory first.
@@ -123,7 +129,9 @@ def run_config_interactive(state: StateManager):
 
             # 2. Handle Input
             try:
-                key = get_key()
+                key = get_key(timeout=0.1)
+                if key is None:
+                    continue
             except KeyboardInterrupt:
                 break
 

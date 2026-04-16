@@ -50,16 +50,22 @@ def get_banner_layout() -> Table:
 
     return grid
 
-
 _suppress_title_reset = False
+_title_pushed = False
 
 def set_terminal_title(title: str = "Grit"):
     """
     Sets the terminal window/tab title using ANSI escape sequences.
+    Uses title stacking to allow restoration on exit.
     """
+    global _title_pushed
     if sys.stdout.isatty():
+        if not _title_pushed:
+            # Push current title to stack (xterm extension)
+            sys.stdout.write("\033[22;0t")
+            _title_pushed = True
         # \033]0;title\007 sets both the window title and the tab name
-        sys.stdout.write(f"\033]0;{title}\007\r")
+        sys.stdout.write(f"\033]0;{title}\007")
         sys.stdout.flush()
 
 
@@ -74,12 +80,14 @@ def suppress_title_reset():
 
 def reset_terminal_title():
     """
-    Resets the terminal title to empty/default on exit.
+    Resets the terminal title by popping from the stack on exit.
     """
     if sys.stdout.isatty() and not _suppress_title_reset:
-        # Clear title to let shell take over
-        sys.stdout.write("\033]0;\007")
-        sys.stdout.flush()
+        if _title_pushed:
+            # Restore title from stack
+            sys.stdout.write("\033[23;0t")
+            sys.stdout.flush()
+
 
 
 atexit.register(reset_terminal_title)
@@ -119,12 +127,13 @@ def get_key(timeout: float = None) -> str:
         if ch == '\x03':  # Ctrl+C
             raise KeyboardInterrupt
 
-        # If it's an escape sequence, read the next bytes with a short timeout
+        # If it's an escape sequence, read the next bytes immediately
         if ch == '\x1b':
-            # Check if there's more data to read (the rest of the arrow key)
-            r, _, _ = select.select([fd], [], [], 0.05)
+            # Most terminals send [A, [B, etc. for arrows. 
+            # We use a very short timeout to see if more bytes follow \x1b
+            r, _, _ = select.select([fd], [], [], 0.02)
             if r:
-                # Capture the rest (usually 2 more chars for arrows like [A)
+                # Read the next two characters (e.g., '[A')
                 ch += os.read(fd, 2).decode(errors='ignore')
 
         return ch
@@ -148,61 +157,33 @@ def run_text_input(title: str, initial_text: str = "", help_text: str = "",
     # Use screen=False to keep history on screen after finishing
     with Live(auto_refresh=False, console=console, screen=False) as live:
         last_size = console.size
-        # Initial render
-        grid = Table.grid(expand=True)
-        if show_banner: grid.add_row(get_banner_layout())
-        input_grid = Table.grid(expand=True)
-        input_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
-        current_lines = text.count('\n') + 1
-        target_height = max(min_lines, current_lines)
-        display_text = Text(text); display_text.append("_", style="bold white")
-        input_grid.add_row(Padding(Panel(display_text, border_style=BRAND_COLOR, padding=(1, 2), height=target_height), (1, 0)))
-        input_grid.add_row(Text(f" {help_text}", style="dim"))
-        grid.add_row(Padding(input_grid, (0, 4)))
-        live.update(grid, refresh=True)
+        
+        def render():
+            grid = Table.grid(expand=True)
+            if show_banner: grid.add_row(get_banner_layout())
+            input_grid = Table.grid(expand=True)
+            input_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
+            current_lines = text.count('\n') + 1
+            target_height = max(min_lines, current_lines)
+            display_text = Text(text); display_text.append("_", style="bold white")
+            input_grid.add_row(Padding(Panel(display_text, border_style=BRAND_COLOR, padding=(1, 2), height=target_height), (1, 0)))
+            if not help_text:
+                h = "[Enter] Newline  [Ctrl+D] Save  [Ctrl+C] Abort"
+            else: h = help_text
+            input_grid.add_row(Text(f" {h}", style="dim"))
+            grid.add_row(Padding(input_grid, (0, 4)))
+            live.update(grid, refresh=True)
+
+        render() # Initial render
 
         while True:
-            # Use a timeout to ensure we check for terminal resize
             key = get_key(timeout=0.1)
             
-            # Re-render ONLY if key pressed or size changed
-            if key is not None or console.size != last_size:
+            # Re-render on resize regardless of key
+            if console.size != last_size:
                 last_size = console.size
-                
-                # Compose final view
-                grid = Table.grid(expand=True)
-                if show_banner:
-                    grid.add_row(get_banner_layout())
-
-                # Input area
-                input_grid = Table.grid(expand=True)
-                input_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
-
-                # Calculate height for dynamic expansion
-                current_lines = text.count('\n') + 1
-                target_height = max(min_lines, current_lines)
-
-                # Text area with cursor emulation
-                display_text = Text(text)
-                display_text.append("_", style="bold white")  # Cursor
-
-                input_grid.add_row(
-                    Padding(
-                        Panel(
-                            display_text, border_style=BRAND_COLOR, padding=(1, 2),
-                            height=target_height
-                            ),
-                        (1, 0)
-                    )
-                )
-
-                # Footer / Help
-                if not help_text:
-                    help_text = "[Enter] Newline  [Ctrl+D] Save  [Ctrl+C] Abort"
-                input_grid.add_row(Text(f" {help_text}", style="dim"))
-                grid.add_row(Padding(input_grid, (0, 4)))
-
-                live.update(grid, refresh=True)
+                render()
+                if key is None: continue
 
             if key is None:
                 continue
@@ -218,6 +199,9 @@ def run_text_input(title: str, initial_text: str = "", help_text: str = "",
                 text = text[:-1]
             elif len(key) == 1 and ord(key) >= 32:  # Normal character input
                 text += key
+            
+            # Re-render after state change
+            render()
 
     return text.strip()
 
@@ -234,46 +218,28 @@ def run_selection_menu(title: str, options: list[str], selected_idx: int = 0,
     with Live(auto_refresh=False, console=console, screen=False) as live:
         last_size = console.size
         
-        # Initial render
-        grid = Table.grid(expand=True)
-        if show_banner: grid.add_row(get_banner_layout())
-        menu_grid = Table.grid(expand=True)
-        menu_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
-        menu_grid.add_row("")
-        for i, opt in enumerate(options):
-            is_cur = i == idx; prefix = "▶ " if is_cur else "  "; style = f"bold {BRAND_COLOR}" if is_cur else "dim"
-            menu_grid.add_row(Text(f"{prefix}{opt}", style=style))
-        grid.add_row(Padding(menu_grid, (0, 4)))
-        grid.add_row(Text("\n [↑↓] Navigate  [Enter] Select  [Q] Abort", style="dim"))
-        live.update(grid, refresh=True)
+        def render():
+            grid = Table.grid(expand=True)
+            if show_banner: grid.add_row(get_banner_layout())
+            menu_grid = Table.grid(expand=True)
+            menu_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
+            menu_grid.add_row("")
+            for i, opt in enumerate(options):
+                is_cur = i == idx; prefix = "▶ " if is_cur else "  "; style = f"bold {BRAND_COLOR}" if is_cur else "dim"
+                menu_grid.add_row(Text(f"{prefix}{opt}", style=style))
+            grid.add_row(Padding(menu_grid, (0, 4)))
+            grid.add_row(Text("\n [↑↓] Navigate  [Enter] Select  [Q] Abort", style="dim"))
+            live.update(grid, refresh=True)
+
+        render() # Initial render
 
         while True:
-            # Use a timeout to ensure we check for terminal resize
             key = get_key(timeout=0.1)
             
-            if key is not None or console.size != last_size:
+            if console.size != last_size:
                 last_size = console.size
-                
-                grid = Table.grid(expand=True)
-                if show_banner:
-                    grid.add_row(get_banner_layout())
-
-                menu_grid = Table.grid(expand=True)
-                menu_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
-                menu_grid.add_row("")
-
-                for i, opt in enumerate(options):
-                    is_cur = i == idx
-                    prefix = "▶ " if is_cur else "  "
-                    style = f"bold {BRAND_COLOR}" if is_cur else "dim"
-                    menu_grid.add_row(Text(f"{prefix}{opt}", style=style))
-
-                grid.add_row(Padding(menu_grid, (0, 4)))
-                grid.add_row(
-                    Text("\n [↑↓] Navigate  [Enter] Select  [Q] Abort", style="dim")
-                    )
-
-                live.update(grid, refresh=True)
+                render()
+                if key is None: continue
             
             if key is None:
                 continue
@@ -286,6 +252,8 @@ def run_selection_menu(title: str, options: list[str], selected_idx: int = 0,
                 return None, -1
             elif key in ('\r', '\n'):
                 return options[idx], idx
+            
+            render()
 
 
 def show_victory_animation():

@@ -68,16 +68,18 @@ def main(
     # Initialize Loguru based on the --logs flag
     setup_logger(verbose=logs)
 
-    # Always print banner except for help, version, or interactive commands that
-    # handle their own branding (usually those that use full-screen Live).
-    is_interactive = any(arg in sys.argv for arg in ["config", "dashboard", "dash", "move"])
+    # Improved interactive detection: check subcommand directly
+    interactive_cmds = ["config", "dashboard", "dash", "move", "_ai-internal"]
+    invoked = ctx.invoked_subcommand
     
-    # Handle the no-args case where we might jump straight into config
-    if ctx.invoked_subcommand is None and not is_config_valid():
+    is_interactive = invoked in interactive_cmds
+    
+    # Commit without passthrough args is interactive and uses custom UI
+    if invoked == "commit" and not ctx.args:
         is_interactive = True
     
-    # Commit without args is interactive and uses custom UI
-    if "commit" in sys.argv and len(sys.argv) == 2:
+    # Handle the no-args case where we might jump straight into config
+    if invoked is None and not is_config_valid():
         is_interactive = True
 
     if "--help" not in sys.argv and "-v" not in sys.argv and "--version" not in sys.argv and not is_interactive:
@@ -306,12 +308,21 @@ def _ai_internal(
     from pathlib import Path
     from grit.state import DEFAULT_DB_DIR
     
-    # CRITICAL: Redirect stdout/stderr to log file immediately to prevent EIO errors
-    # in Electron/VSCode terminals when the parent process exits.
+    # Ensure the directory exists
+    DEFAULT_DB_DIR.mkdir(parents=True, exist_ok=True)
     log_file = DEFAULT_DB_DIR / "ai_background.log"
-    log_file.parent.mkdir(parents=True, exist_ok=True)
     
-    log_stream = open(log_file, "a", buffering=1) # Line buffered
+    # Open log file immediately in 'w' mode to prevent accumulation across runs
+    try:
+        log_stream = open(log_file, "w", buffering=1)
+    except Exception as e:
+        # If we can't open the log file, we're in trouble, but let's try to notify
+        try:
+            import subprocess
+            subprocess.run(["osascript", "-e", f'display notification "Failed to start AI background: {e}" with title "Grit AI Error"'], check=False)
+        except: pass
+        return
+
     sys.stdout = log_stream
     sys.stderr = log_stream
 
@@ -343,14 +354,28 @@ def _ai_internal(
                 subprocess.run([
                     "osascript", 
                     "-e", 
-                    f'display notification "✨ AI draft is ready for your commit!" with title "Grit AI"'
+                    'display notification "✨ AI draft is ready! Run `grit commit` to review." with title "Grit AI Success" sound name "Glass"'
                 ], check=False)
             except Exception as ne:
                 log(f"Notification failed: {ne}")
         else:
             log("LLM returned empty message or failed.")
+            try:
+                subprocess.run([
+                    "osascript", 
+                    "-e", 
+                    'display notification "AI generation failed. Please try manual commit." with title "Grit AI Failed" sound name "Basso"'
+                ], check=False)
+            except: pass
     except Exception as e:
         log(f"CRITICAL ERROR: {e}")
+        try:
+            subprocess.run([
+                "osascript", 
+                "-e", 
+                f'display notification "Error: {e}" with title "Grit AI Error" sound name "Basso"'
+            ], check=False)
+        except: pass
     finally:
         # Cleanup temp diff file
         try:
