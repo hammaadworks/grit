@@ -6,6 +6,8 @@ DEFAULT_DB_DIR = Path.home() / ".config" / "grit"
 DEFAULT_DB_PATH = DEFAULT_DB_DIR / "state.db"
 
 
+from grit.constants import MAX_DRAFT_HISTORY, YEAR_DAYS
+
 class StateManager:
     """Manages local state using SQLite for the Grit CLI."""
 
@@ -60,18 +62,18 @@ class StateManager:
         return None
 
     def set_draft(self, diff_hash: str, message: str, status: str = "success"):
-        """Cache a commit draft for a specific diff. Enforces a 50-entry FIFO limit."""
+        """Cache a commit draft for a specific diff. Enforces a FIFO limit."""
         import datetime
         now_iso = datetime.datetime.now().astimezone().isoformat(timespec='seconds')
         
         # 1. Identify which diff_hashes are about to be evicted
         cursor = self._conn.execute(
-            '''
+            f'''
             SELECT diff_hash FROM drafts 
             WHERE diff_hash NOT IN (
                 SELECT diff_hash FROM drafts 
                 ORDER BY timestamp DESC 
-                LIMIT 49
+                LIMIT {MAX_DRAFT_HISTORY - 1}
             )
         '''
         )
@@ -90,14 +92,14 @@ class StateManager:
                             ''', (diff_hash, message, status, now_iso)
                 )
             
-            # 3. Enforce 50-entry limit (FIFO)
+            # 3. Enforce limit (FIFO)
             self._conn.execute(
-                '''
+                f'''
                 DELETE FROM drafts 
                 WHERE diff_hash NOT IN (
                     SELECT diff_hash FROM drafts 
                     ORDER BY timestamp DESC 
-                    LIMIT 50
+                    LIMIT {MAX_DRAFT_HISTORY}
                 )
                 '''
             )
@@ -107,7 +109,8 @@ class StateManager:
             log_file = self.db_path.parent / f"ai_bg_{h}.log"
             try:
                 log_file.unlink(missing_ok=True)
-            except: pass
+            except:
+                raise
 
     def clear_old_drafts(self, hours: int = 24):
         """Cleanup old drafts to keep the DB lean."""
@@ -134,7 +137,7 @@ class StateManager:
         """Marks a specific year as synchronized and safe for allocation."""
         years = set(self.get_synced_years())
         years.add(year)
-        years_str = ",".join(map(str, sorted(list(years))))
+        years_str = ",".join(map(str, sorted(years)))
         self.set_config("synced_years", years_str)
 
     def is_year_synced(self, year: int) -> bool:
@@ -191,7 +194,7 @@ class StateManager:
         if current_count > 0:
             self.set_commit_count(date, current_count - 1)
 
-    def get_history(self, days: int = 365) -> list[dict]:
+    def get_history(self, days: int = YEAR_DAYS) -> list[dict]:
         """Fetch commit history for the last X days in a single efficient query."""
         from datetime import datetime, timedelta
 

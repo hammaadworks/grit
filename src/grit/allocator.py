@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from grit.constants import YEAR_DAYS
 from grit.state import StateManager
 
 
@@ -66,7 +67,7 @@ class DateAllocator:
             UNION ALL
             SELECT date(d, '+1 day')
             FROM dates
-            WHERE d < date(?, '+365 days')
+            WHERE d < date(?, '+{YEAR_DAYS} days')
         )
         SELECT d.d, COALESCE(c.count, 0)
         FROM dates d
@@ -144,7 +145,7 @@ class DateAllocator:
             UNION ALL
             SELECT date(d, '+1 day')
             FROM dates
-            WHERE d < date(?, '+365 days')
+            WHERE d < date(?, '+{YEAR_DAYS} days')
         )
         SELECT d.d
         FROM dates d

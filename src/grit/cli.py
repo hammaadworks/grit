@@ -25,8 +25,9 @@ state = StateManager()
 
 # Main Typer Application Interface
 app = typer.Typer(
-    help="Grit: Intelligently distribute your git commits to maintain a consistent "
-         "graph.",
+    help=f"\n [bold {BRAND_COLOR}]Grit v{__version__}[/bold {BRAND_COLOR}] — High-fidelity commit distribution system.\n",
+    epilog=f"\n [dim]Hint: Use [bold white]grit <command> --help[/bold white] for full flag documentation.[/dim]\n",
+    context_settings={"help_option_names": ["-h", "--help"]},
     add_completion=False,
     rich_markup_mode="rich",
     no_args_is_help=False
@@ -71,18 +72,18 @@ def main(
     # Improved interactive detection: check subcommand directly
     interactive_cmds = ["config", "dashboard", "dash", "move", "_ai-internal"]
     invoked = ctx.invoked_subcommand
-    
+
     is_interactive = invoked in interactive_cmds
-    
+
     # Commit without passthrough args is interactive and uses custom UI
     if invoked == "commit" and not ctx.args:
         is_interactive = True
-    
+
     # Handle the no-args case where we might jump straight into config
     if invoked is None and not is_config_valid():
         is_interactive = True
 
-    if "--help" not in sys.argv and "-v" not in sys.argv and "--version" not in sys.argv and not is_interactive:
+    if "--help" not in sys.argv and "-v" not in sys.argv and "--version" not in sys.argv and not is_interactive and invoked != "info":
         print_banner()
 
     if ctx.invoked_subcommand is None:
@@ -104,24 +105,32 @@ def main(
 @app.command()
 def config(
         target: Annotated[Optional[int], typer.Option(
-            "--target", "-t", help="Daily commit target"
+            "--target", "-t", help="Daily commit target (e.g., 1)"
             )] = None,
         start: Annotated[Optional[str], typer.Option(
-            "--start", "-s", help="Start date (YYYY-MM-DD)"
+            "--start", "-s", help="Start date boundary (YYYY-MM-DD)"
             )] = None,
         username: Annotated[Optional[str], typer.Option(
-            "--username", "-u", help="GitHub username"
+            "--username", "-u", help="GitHub username for sync"
             )] = None,
         fill_from: Annotated[Optional[str], typer.Option(
-            "--fill-from", "-f", help="Fill strategy (today or start_date)"
+            "--fill-from", "-f", help="Strategy: 'today' or 'start_date'"
+            )] = None,
+        ai_url: Annotated[Optional[str], typer.Option(
+            "--ai-url", help="LLM API base URL (e.g. http://localhost:11434/v1)"
+            )] = None,
+        ai_key: Annotated[Optional[str], typer.Option(
+            "--ai-key", help="LLM API key (Gemini, OpenAI, etc.)"
+            )] = None,
+        ai_model: Annotated[Optional[str], typer.Option(
+            "--ai-model", help="LLM model name (e.g. 'gemini-1.5-flash')"
             )] = None
 ):
     """
-    Grit Control Center: High-fidelity interactive settings management.
-    Navigate with arrow keys, edit with Enter, and save with S.
+    Enter the interactive Control Center or apply headless configuration.
     """
     # Headless Update Mode: Applied if any flags are passed.
-    if any(v is not None for v in [target, start, username, fill_from]):
+    if any(v is not None for v in [target, start, username, fill_from, ai_url, ai_key, ai_model]):
         if target is not None:
             state.set_config("daily_target", str(target))
         if start is not None:
@@ -137,6 +146,13 @@ def config(
                     f"'start_date'.[/{ERROR_COLOR}]"
                     )
                 raise typer.Exit(1)
+        if ai_url is not None:
+            state.set_config("ai_base_url", ai_url)
+        if ai_key is not None:
+            state.set_config("ai_api_key", ai_key)
+        if ai_model is not None:
+            state.set_config("ai_model", ai_model)
+
         console.print(
             f"[{SUCCESS_COLOR}]✓ Headless configuration applied.[/{SUCCESS_COLOR}]"
             )
@@ -157,12 +173,11 @@ def sync():
 @app.command()
 def status(
         yes: Annotated[
-            bool, typer.Option("--yes", "-y", help="Skip the repository state prompt")
+            bool, typer.Option("--yes", "-y", help="Skip the repository state confirmation prompt")
         ] = False
 ):
     """
-    Renders the Grit Intelligence Dashboard.
-    Displays metrics, the spillover pipeline, and celebrates daily goals.
+    Renders the Intelligence Dashboard. Displays metrics and the spillover pipeline.
     """
     run_status(state, yes=yes)
 
@@ -186,7 +201,7 @@ def dash(
 @app.command()
 def dashboard(
         port: int = typer.Option(
-            0, "--port", "-p", help="Port to run the dashboard on"
+            0, "--port", "-p", help="Port to run the dashboard on (0 for auto-assign)"
             ),
         logs: bool = typer.Option(
             False, "--logs", "-l", help="Run in foreground and show server logs"
@@ -196,8 +211,8 @@ def dashboard(
             )
 ):
     """
-    Launches the Grit Intelligence Dashboard in your browser.
-    A high-fidelity offline-first GUI for your commit pipeline.
+    Launches the high-fidelity web dashboard. 
+    A modern offline-first GUI for your commit distribution metrics.
     """
     pid_file = state.db_path.parent / "dashboard.pid"
 
@@ -277,19 +292,18 @@ def dashboard(
 def commit(
         ctx: typer.Context,
         verbose: Annotated[
-            bool, typer.Option("--verbose", "-v", help="Show AI interaction logs")
+            bool, typer.Option("--verbose", "-v", help="Show detailed AI interaction logs")
         ] = False,
         ai: Annotated[
-            bool, typer.Option("--ai", "-a", help="Run AI generation in the background and notify when ready")
+            bool, typer.Option("--ai", "-a", help="Trigger background AI generation and notify when draft is ready")
         ] = False,
         logs: Annotated[
-            bool, typer.Option("--logs", help="Enable detailed system logs for debugging")
+            bool, typer.Option("--logs", help="Enable system-level logging for debugging")
         ] = False
 ):
     """
-    The core wrapper for `git commit`. Automatically allocates dates to preserve
-    streaks.
-    Run without arguments to enter the Interactive AI DevX Wizard.
+    The core wrapper for `git commit`. Intelligently allocates dates to preserve streaks.
+    Pass standard git flags or run without arguments for the AI Wizard.
     """
     if logs:
         setup_logger(verbose=True)
@@ -305,31 +319,49 @@ def _ai_internal(
     """Internal command for background AI generation. Do not call manually."""
     import sys
     import time
+    import random
+    import os
     from pathlib import Path
     from grit.state import DEFAULT_DB_DIR
     
     # Ensure the directory exists
     DEFAULT_DB_DIR.mkdir(parents=True, exist_ok=True)
-    log_file = DEFAULT_DB_DIR / "ai_background.log"
+    log_file = DEFAULT_DB_DIR / f"ai_bg_{diff_hash}.log"
     
-    # Open log file immediately in 'w' mode to prevent accumulation across runs
+    # Open log file immediately
+    log_stream = None
     try:
-        log_stream = open(log_file, "w", buffering=1)
+        log_stream = open(log_file, "a", buffering=1)
+        sys.stdout = log_stream
+        sys.stderr = log_stream
     except Exception as e:
-        # If we can't open the log file, we're in trouble, but let's try to notify
+        # Fallback to stderr if log file fails
+        sys.stderr.write(f"Failed to open log file {log_file}: {e}\n")
         try:
             import subprocess
             subprocess.run(["osascript", "-e", f'display notification "Failed to start AI background: {e}" with title "Grit AI Error"'], check=False)
         except: pass
-        return
+        if not log_stream and not sys.stderr.isatty():
+             return # Exit if we can't log anywhere useful and not in terminal
 
-    sys.stdout = log_stream
-    sys.stderr = log_stream
+    def log(msg, color=None):
+        ts = time.strftime('%H:%M:%S')
+        # Use simple markers for engagement without complex rich formatting in log files
+        print(f"[{ts}] {msg}")
 
-    def log(msg):
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+    quotes = [
+        "Analyzing architectural nuances...",
+        "Evaluating semantic impact of changes...",
+        "Calculating optimal conventional commit structure...",
+        "Distilling technical wisdom from your diff...",
+        "Synthesizing high-fidelity documentation...",
+        "Aligning with industry-standard commit protocols..."
+    ]
 
-    log(f"Starting background generation for diff {diff_hash[:8]}...")
+    log("✦ Grit Intelligence System: Background Thread Initialized")
+    log(f"✦ Process ID: {os.getpid()}")
+    log(f"✦ Target Diff: {diff_hash[:8]}")
+    log("-" * 50)
     
     from grit.ai import generate_commit_message
     from grit.state import StateManager
@@ -341,49 +373,79 @@ def _ai_internal(
     ai_model = state.get_config("ai_model")
 
     try:
+        log("➤ Reading staged changes...")
         diff = Path(diff_path).read_text(encoding="utf-8")
-        log(f"Read diff ({len(diff)} chars). Calling LLM ({ai_model})...")
+        log(f"✓ Diff ingested ({len(diff)} characters)")
         
+        log(f"➤ Contacting LLM Intelligence Core ({ai_model})...")
+        log(f"✦ {random.choice(quotes)}")
+        
+        start_time = time.time()
         msg = generate_commit_message(diff, ai_url, ai_key, ai_model, verbose)
+        elapsed = time.time() - start_time
         
         if msg:
-            state.set_draft(diff_hash, msg)
-            log("Success! Draft saved to database.")
-            # Notify on macOS
+            state.set_draft(diff_hash, msg, status="success")
+            log(f"✓ Semantic synthesis complete in {elapsed:.1f}s")
+            log("-" * 50)
+            log("FINAL DRAFT:")
+            print(msg)
+            log("-" * 50)
+            log("✦ Intelligence safely persisted to local database.")
+            log("✦ Task complete. You may now run `grit commit` to review.")
+            
+            # Notify on macOS (Success)
             try:
-                subprocess.run([
-                    "osascript", 
-                    "-e", 
-                    'display notification "✨ AI draft is ready! Run `grit commit` to review." with title "Grit AI Success" sound name "Glass"'
-                ], check=False)
+                log("➤ Sending macOS notification...")
+                msg_text = "✨ AI draft is ready! Run 'grit commit' to review."
+                title_text = "Grit AI Success"
+                cmd = f'display notification "{msg_text}" with title "{title_text}" sound name "Glass"'
+                
+                res = subprocess.run(["osascript", "-e", cmd], capture_output=True, text=True)
+                if res.returncode != 0:
+                    log(f"✗ Notification command failed with code {res.returncode}")
+                    log(f"  Error: {res.stderr.strip()}")
+                else:
+                    log("✓ Notification sent successfully")
             except Exception as ne:
-                log(f"Notification failed: {ne}")
+                log(f"✗ Unexpected error during notification: {ne}")
         else:
-            log("LLM returned empty message or failed.")
+            log("✗ LLM returned empty message or failed.")
+            state.set_draft(diff_hash, "", status="failure")
             try:
-                subprocess.run([
-                    "osascript", 
-                    "-e", 
-                    'display notification "AI generation failed. Please try manual commit." with title "Grit AI Failed" sound name "Basso"'
-                ], check=False)
-            except: pass
+                log("➤ Sending failure notification...")
+                msg_text = "AI generation failed. LLM returned empty result."
+                title_text = "Grit AI Failed"
+                cmd = f'display notification "{msg_text}" with title "{title_text}" sound name "Basso"'
+                subprocess.run(["osascript", "-e", cmd], capture_output=True)
+            except Exception as ne:
+                log(f"✗ Failure notification failed: {ne}")
+
     except Exception as e:
         log(f"CRITICAL ERROR: {e}")
+        import traceback
+        log(traceback.format_exc())
+        state.set_draft(diff_hash, str(e), status="failure")
         try:
-            subprocess.run([
-                "osascript", 
-                "-e", 
-                f'display notification "Error: {e}" with title "Grit AI Error" sound name "Basso"'
-            ], check=False)
-        except: pass
+            # Include error reason in the notification
+            error_reason = str(e)[:40]
+            msg_text = f"AI Failed: {error_reason}"
+            title_text = "Grit AI Error"
+            cmd = f'display notification "{msg_text}" with title "{title_text}" sound name "Basso"'
+            subprocess.run(["osascript", "-e", cmd], capture_output=True)
+        except Exception as ne:
+            log(f"✗ Error notification failed: {ne}")
     finally:
         # Cleanup temp diff file
         try:
-            Path(diff_path).unlink(missing_ok=True)
-            log("Cleaned up temporary diff file.")
+            if Path(diff_path).exists():
+                Path(diff_path).unlink()
+                log("➤ Cleaned up temporary diff file.")
         except:
             pass
-        log_stream.close()
+        if log_stream:
+            log_stream.close()
+
 
 
 @app.command(
@@ -411,140 +473,28 @@ def move(
 
 
 @app.command()
-def info():
+def info(ctx: typer.Context):
     """
-    Displays the comprehensive Grit Manual and Command Reference.
+    Displays high-level system information and command overview.
     """
-    # Keeping info command logic here for now as it's mostly static text
-    from rich.table import Table
-    from rich.padding import Padding
-    from rich.text import Text
-
-    console.print(
-        Padding(Text("SYSTEM OVERVIEW", style=f"bold {ACCENT_COLOR}"), (1, 2, 0, 2))
-        )
-    console.print(
-        Padding(
-            "Grit is a high-performance CLI wrapper designed to maintain a consistent "
-            "GitHub contribution graph by intelligently distributing your real work "
-            "across "
-            "a timeline. It operates with zero latency and prioritizes repository "
-            "integrity.",
-            (0, 2, 1, 2)
-        )
-    )
-
-    console.print(
-        Padding(Text("COMMAND REFERENCE", style=f"bold {ACCENT_COLOR}"), (1, 2, 0, 2))
-        )
-
-    commands = [
-        ("info", "View this comprehensive documentation and command reference.", []),
-        ("config",
-         "Enter the interactive Control Center to manage your targets and identity.", [
-             ("-t, --target [int]", "Set your daily commit goal."),
-             ("-s, --start [date]", "Define the timeline start boundary (YYYY-MM-DD)."),
-             ("-u, --username [str]",
-              "Link your GitHub identity for graph synchronization."),
-             ("-f, --fill-from [str]", "Allocation strategy: 'today' or 'start_date'."),
-             ("Editor: Command", "Set your preferred editor (e.g., 'code --wait').")
-         ]),
-        ("commit",
-         "The core wrapper for `git commit`. Run without arguments for the "
-         "Interactive AI Wizard.",
-         [
-             ("--ai, -a", "Background AI generation and notify when draft is ready."),
-             ("[standard git flags]",
-              "All native git arguments are passed through transparently."),
-             ("--amend",
-              "Grit detects and warns that amends do not increment daily targets.")
-         ]),
-        ("status",
-         "View your Intelligence Dashboard, commit capacity, and future pipeline.",
-         [
-             ("-y, --yes", "Skip the repository state prompt.")
-         ]),
-
-        ("sync",
-         "Manually trigger a three-way merge between Local Git, Remote GitHub, "
-         "and Grit State.",
-         []),
-        ("log",
-         "A beautifully enhanced, human-readable git log on jetpack rollerskates.", []),
-
-        ("move",
-         "Interactive history re-allocator. Select a commit to move to the next fill slot.",
-         [
-             ("-p, --push", "Force push changes to remote after move.")
-         ]),
-
-        ("dashboard",
-         "Launch the high-fidelity web dashboard for visual intelligence. Alias: "
-         "'dash'",
-         [
-             ("-p, --port [int]", "Specify a custom port for the local server."),
-             ("-l, --logs", "Run in foreground and show server logs."),
-             ("-s, --stop", "Safely terminate any running background dashboard.")
-         ]),
-
-        ("spread",
-         "Redistribute a range of commits across the timeline to fill history gaps.", [
-             ("[commit-range]",
-              "The range of commits to redistribute (e.g. HEAD~5..HEAD)."),
-             ("-p, --push", "Force push changes to remote after spread.")
-         ]),
-        ("undo",
-         "The 'Quantum Undo'. Safely regress the last commit and restore your streak "
-         "count.",
-         []),
-        ("ungrit",
-         "Securely decommission Grit and delete all local configuration and state.", [
-             ("-f, --force", "Bypass the interactive confirmation prompt.")
-         ])
-    ]
-
-    for cmd, desc, flags in commands:
-        console.print(Padding(Text(f"• {cmd}", style=f"bold {BRAND_COLOR}"), (0, 4)))
-        console.print(Padding(desc, (0, 6)))
-
-        if flags:
-            flag_table = Table(
-                box=None, show_header=False, padding=(0, 2), expand=False
-                )
-            flag_table.add_column(width=28)
-            flag_table.add_column()
-
-            for flag, flag_desc in flags:
-                flag_table.add_row(
-                    Text(f"  {flag}", style=ACCENT_COLOR),
-                    Text(flag_desc, style="dim")
-                )
-            console.print(Padding(flag_table, (0, 6)))
-        console.print()
-
-    # Add Tips & Tricks section
-    console.print(
-        Padding(Text("TIPS & TRICKS", style=f"bold {ACCENT_COLOR}"), (1, 2, 0, 2))
-    )
-    tips = [
-        ("Background AI", "Use `grit commit --ai` to background the LLM. Monitor it with: `tail -f ~/.config/grit/ai_background.log`"),
-        ("Draft Caching", "Grit hashes your diff. If you've generated a message before, it loads instantly from the 50-entry FIFO cache."),
-        ("Custom Editor", "Set 'Editor: Command' in config to skip Vim. Use 'code --wait' for VS Code or 'open -e' for TextEdit."),
-    ]
-    for tip_title, tip_desc in tips:
-        console.print(Padding(f"✦ [bold white]{tip_title}[/bold white]: {tip_desc}", (0, 4, 1, 4)))
+    # Set the program name for the help output to ensure correct usage string
+    ctx.parent.info_name = "grit"
+    # Print the banner manually since we want it for info
+    print_banner()
+    # Print the auto-generated help content (which now includes epilog for the hint)
+    console.print(ctx.parent.get_help())
 
 
 @app.command()
 def spread(
         commit_range: Annotated[
-            str, typer.Argument(help="Commit range to spread (e.g. HEAD~5..HEAD)")],
+            str, typer.Argument(help="Commit range to redistribute (e.g. HEAD~5..HEAD)")],
         push: Annotated[
-            bool, typer.Option("--push", "-p", help="Force push changes to remote")
+            bool, typer.Option("--push", "-p", help="Force push changes to remote after spreading")
         ] = False
 ):
     """
-    Grit Spread: Redistributes a range of commits across the timeline.
+    Redistribute a range of commits across the timeline to fill historical gaps.
     """
     from grit.allocator import DateAllocator
     from rich.padding import Padding

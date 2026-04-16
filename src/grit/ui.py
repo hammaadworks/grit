@@ -11,13 +11,10 @@ from rich.text import Text
 
 from grit import __version__
 
-# Billion Dollar Design System (Official Grit Palette)
-# These constants define the sacred visual identity of Grit.
-BRAND_COLOR = "bright_cyan"  # Primary teal/blue brand highlight
-SUCCESS_COLOR = "spring_green3"  # For checkmarks and completion
-WARN_COLOR = "gold1"  # For warnings and non-blocking issues
-ERROR_COLOR = "deep_pink3"  # For fatal errors or destructive prompts
-ACCENT_COLOR = "bright_cyan"  # Secondary highlights (standardized to brand color)
+from grit.constants import (
+    BRAND_COLOR, SUCCESS_COLOR, WARN_COLOR, ERROR_COLOR, ACCENT_COLOR,
+    KEY_READ_TIMEOUT, ESCAPE_SEQ_TIMEOUT, VICTORY_ANIMATION_DURATION, VICTORY_ANIMATION_SLEEP
+)
 
 console = Console()
 err_console = Console(stderr=True)
@@ -135,7 +132,7 @@ def get_key(timeout: float = None) -> str:
         if ch == '\x1b':
             # Most terminals send [A, [B, etc. for arrows. 
             # We use a very short timeout to see if more bytes follow \x1b
-            r, _, _ = select.select([fd], [], [], 0.02)
+            r, _, _ = select.select([fd], [], [], ESCAPE_SEQ_TIMEOUT)
             if r:
                 # Read the next two characters (e.g., '[A')
                 ch += os.read(fd, 2).decode(errors='ignore')
@@ -159,53 +156,55 @@ def run_text_input(title: str, initial_text: str = "", help_text: str = "",
     min_lines = 1  # Minimum lines for collapsed view
 
     # Use screen=False to keep history on screen after finishing
-    with Live(auto_refresh=False, console=console, screen=False) as live:
-        last_size = console.size
-        
-        def render():
-            grid = Table.grid(expand=True)
-            if show_banner: grid.add_row(get_banner_layout())
-            input_grid = Table.grid(expand=True)
-            input_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
-            current_lines = text.count('\n') + 1
-            target_height = max(min_lines, current_lines)
-            display_text = Text(text); display_text.append("_", style="bold white")
-            input_grid.add_row(Padding(Panel(display_text, border_style=BRAND_COLOR, padding=(1, 2), height=target_height), (1, 0)))
-            if not help_text:
-                h = "[Enter] Newline  [Ctrl+D] Save  [Ctrl+C] Abort"
-            else: h = help_text
-            input_grid.add_row(Text(f" {h}", style="dim"))
-            grid.add_row(Padding(input_grid, (0, 4)))
-            live.update(grid, refresh=True)
-
-        render() # Initial render
-
-        while True:
-            key = get_key(timeout=0.1)
+    try:
+        with Live(auto_refresh=False, console=console, screen=False) as live:
+            last_size = console.size
             
-            # Re-render on resize regardless of key
-            if console.size != last_size:
-                last_size = console.size
+            def render():
+                grid = Table.grid(expand=True)
+                if show_banner: grid.add_row(get_banner_layout())
+                input_grid = Table.grid(expand=True)
+                input_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
+                current_lines = text.count('\n') + 1
+                target_height = max(min_lines, current_lines)
+                display_text = Text(text); display_text.append("_", style="bold white")
+                input_grid.add_row(Padding(Panel(display_text, border_style=BRAND_COLOR, padding=(1, 2), height=target_height), (1, 0)))
+                if not help_text:
+                    h = "[Enter] Newline  [Ctrl+D] Save  [Ctrl+C] Abort"
+                else: h = help_text
+                input_grid.add_row(Text(f" {h}", style="dim"))
+                grid.add_row(Padding(input_grid, (0, 4)))
+                live.update(grid, refresh=True)
+
+            render() # Initial render
+
+            while True:
+                key = get_key(timeout=KEY_READ_TIMEOUT)
+                # Re-render on resize regardless of key
+                if console.size != last_size:
+                    last_size = console.size
+                    render()
+                    if key is None: continue
+
+                if key is None:
+                    continue
+
+                # Process key
+                if key == '\x04':  # Ctrl+D (EOF / Save)
+                    break
+                elif key == '\x03':  # Ctrl+C
+                    raise KeyboardInterrupt
+                elif key in ('\r', '\n'):  # Enter key
+                    text += "\n"
+                elif key in ('\x7f', '\x08'):  # Backspace
+                    text = text[:-1]
+                elif len(key) == 1 and ord(key) >= 32:  # Normal character input
+                    text += key
+                
+                # Re-render after state change
                 render()
-                if key is None: continue
-
-            if key is None:
-                continue
-
-            # Process key
-            if key == '\x04':  # Ctrl+D (EOF / Save)
-                break
-            elif key == '\x03':  # Ctrl+C
-                raise KeyboardInterrupt
-            elif key in ('\r', '\n'):  # Enter key
-                text += "\n"
-            elif key in ('\x7f', '\x08'):  # Backspace
-                text = text[:-1]
-            elif len(key) == 1 and ord(key) >= 32:  # Normal character input
-                text += key
-            
-            # Re-render after state change
-            render()
+    finally:
+        set_terminal_title("Grit")
 
     return text.strip()
 
@@ -219,45 +218,47 @@ def run_selection_menu(title: str, options: list[str], selected_idx: int = 0,
     set_terminal_title("Grit — Select")
     idx = selected_idx
     # Use screen=False to keep history on screen after finishing
-    with Live(auto_refresh=False, console=console, screen=False) as live:
-        last_size = console.size
-        
-        def render():
-            grid = Table.grid(expand=True)
-            if show_banner: grid.add_row(get_banner_layout())
-            menu_grid = Table.grid(expand=True)
-            menu_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
-            menu_grid.add_row("")
-            for i, opt in enumerate(options):
-                is_cur = i == idx; prefix = "▶ " if is_cur else "  "; style = f"bold {BRAND_COLOR}" if is_cur else "dim"
-                menu_grid.add_row(Text(f"{prefix}{opt}", style=style))
-            grid.add_row(Padding(menu_grid, (0, 4)))
-            grid.add_row(Text("\n [↑↓] Navigate  [Enter] Select  [Q] Abort", style="dim"))
-            live.update(grid, refresh=True)
-
-        render() # Initial render
-
-        while True:
-            key = get_key(timeout=0.1)
+    try:
+        with Live(auto_refresh=False, console=console, screen=False) as live:
+            last_size = console.size
             
-            if console.size != last_size:
-                last_size = console.size
+            def render():
+                grid = Table.grid(expand=True)
+                if show_banner: grid.add_row(get_banner_layout())
+                menu_grid = Table.grid(expand=True)
+                menu_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
+                menu_grid.add_row("")
+                for i, opt in enumerate(options):
+                    is_cur = i == idx; prefix = "▶ " if is_cur else "  "; style = f"bold {BRAND_COLOR}" if is_cur else "dim"
+                    menu_grid.add_row(Text(f"{prefix}{opt}", style=style))
+                grid.add_row(Padding(menu_grid, (0, 4)))
+                grid.add_row(Text("\n [↑↓] Navigate  [Enter] Select  [Q] Abort", style="dim"))
+                live.update(grid, refresh=True)
+
+            render() # Initial render
+
+            while True:
+                key = get_key(timeout=KEY_READ_TIMEOUT)
+                if console.size != last_size:
+                    last_size = console.size
+                    render()
+                    if key is None: continue
+                
+                if key is None:
+                    continue
+
+                if key == '\x1b[A':
+                    idx = (idx - 1) % len(options)
+                elif key == '\x1b[B':
+                    idx = (idx + 1) % len(options)
+                elif key.lower() == 'q':
+                    return None, -1
+                elif key in ('\r', '\n'):
+                    return options[idx], idx
+                
                 render()
-                if key is None: continue
-            
-            if key is None:
-                continue
-
-            if key == '\x1b[A':
-                idx = (idx - 1) % len(options)
-            elif key == '\x1b[B':
-                idx = (idx + 1) % len(options)
-            elif key.lower() == 'q':
-                return None, -1
-            elif key in ('\r', '\n'):
-                return options[idx], idx
-            
-            render()
+    finally:
+        set_terminal_title("Grit")
 
 
 def show_victory_animation():
@@ -273,7 +274,7 @@ def show_victory_animation():
     colors = ["yellow", "cyan", "magenta", "white", "green"]
 
     with Live(auto_refresh=False, console=console) as live:
-        for _ in range(12):  # Brief 1.2s burst
+        for _ in range(VICTORY_ANIMATION_DURATION):  # Brief 1.2s burst
             width = shutil.get_terminal_size().columns
             burst = "".join(
                 [
@@ -283,5 +284,5 @@ def show_victory_animation():
                 ]
             )
             live.update(Padding(Text.from_markup(burst), (0, 2)), refresh=True)
-            time.sleep(0.08)
+            time.sleep(VICTORY_ANIMATION_SLEEP)
         live.update(Text(""))  # Clear after burst

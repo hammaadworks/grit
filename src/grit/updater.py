@@ -4,6 +4,7 @@ import shutil
 from datetime import datetime, timedelta
 from typing import Optional
 from grit import __version__
+from grit.constants import UPDATE_CHECK_TIMEOUT
 from grit.state import StateManager
 
 # We can point this to a raw file on GitHub or a simple version endpoint
@@ -32,7 +33,7 @@ def get_latest_version(state: StateManager) -> Optional[str]:
     try:
         # We'll try to fetch the latest version from a remote pyproject.toml
         # For this example, we timeout quickly to not block the CLI
-        with httpx.Client(timeout=1.5) as client:
+        with httpx.Client(timeout=UPDATE_CHECK_TIMEOUT) as client:
             response = client.get(VERSION_URL)
             if response.status_code == 200:
                 # Simple parsing of version = "X.X.X" from pyproject.toml

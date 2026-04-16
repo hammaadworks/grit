@@ -33,7 +33,10 @@ def get_local_git_stats(author: str = None, since: str = None) -> Dict[str, int]
     except subprocess.CalledProcessError:
         return {}
 
-def fetch_github_contributions(username: str, year: int = None) -> Dict[str, int]:
+from grit.constants import GITHUB_CONTRIBUTIONS_TIMEOUT
+
+def fetch_github_contributions(username: str, year: int = None) -> dict[str, int]:
+
     """
     Silently scrapes the user's public GitHub contribution graph without requiring a PAT.
     If year is provided, it fetches that specific historical year.
@@ -44,7 +47,7 @@ def fetch_github_contributions(username: str, year: int = None) -> Dict[str, int
         url += f"?from={year}-01-01&to={year}-12-31"
         
     try:
-        response = httpx.get(url, timeout=10.0)
+        response = httpx.get(url, timeout=GITHUB_CONTRIBUTIONS_TIMEOUT)
         response.raise_for_status()
     except (httpx.HTTPStatusError, httpx.RequestError, Exception):
         return {}

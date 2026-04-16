@@ -6,6 +6,13 @@ from pydantic import BaseModel, ValidationError, Field
 from pydantic_ai import Agent
 
 
+from grit.constants import (
+    COMMIT_TYPES, RAW_DIFF_PROMPT_LIMIT, AI_RETRIES,
+    OLLAMA_NUM_CTX, OLLAMA_NUM_PREDICT, OLLAMA_NUM_GPU, 
+    OLLAMA_KEEP_ALIVE, OLLAMA_MAX_LOADED_MODELS
+)
+
+
 # =========================
 # Schema
 # =========================
@@ -14,7 +21,7 @@ class CommitMessage(BaseModel):
     Structured commit message following Conventional Commits.
     """
     type: Literal["feat", "fix", "docs", "style", "refactor", "test", "chore"] = Field(
-        description="The type of the change: feat (new feature), fix (bug fix), docs (documentation), style (formatting), refactor (code change), test (adding tests), chore (maintenance)"
+        description=f"The type of the change: {', '.join(COMMIT_TYPES)}"
     )
     scope: str = Field(description="The architectural scope affected (e.g. core, cli, ui, allocator)")
     message: str = Field(description="A concise summary of the change in the imperative mood")
@@ -57,11 +64,11 @@ def generate_commit_message(
     if provider_prefix == "ollama":
         env_vars.update({
             "OLLAMA_API_KEY": clean_key or "ollama",
-            "OLLAMA_NUM_CTX": "4096", # Increased context for larger diffs
-            "OLLAMA_NUM_PREDICT": "256", # Enough for header + body
-            "OLLAMA_NUM_GPU": "1", # Use Metal on Mac
-            "OLLAMA_KEEP_ALIVE": "10m", # Keep in memory longer for back-to-back commits
-            "OLLAMA_MAX_LOADED_MODELS": "1",
+            "OLLAMA_NUM_CTX": OLLAMA_NUM_CTX, # Increased context for larger diffs
+            "OLLAMA_NUM_PREDICT": OLLAMA_NUM_PREDICT, # Enough for header + body
+            "OLLAMA_NUM_GPU": OLLAMA_NUM_GPU, # Use Metal on Mac
+            "OLLAMA_KEEP_ALIVE": OLLAMA_KEEP_ALIVE, # Keep in memory longer for back-to-back commits
+            "OLLAMA_MAX_LOADED_MODELS": OLLAMA_MAX_LOADED_MODELS,
         })
         if clean_url:
             env_vars["OLLAMA_BASE_URL"] = clean_url
@@ -95,7 +102,7 @@ def generate_commit_message(
             full_model_string,
             output_type=CommitMessage,
             instructions=instructions,
-            retries=2, # Reduced retries to save time on slow models
+            retries=AI_RETRIES, # Reduced retries to save time on slow models
         )
 
         prompt = f"""
@@ -103,10 +110,10 @@ STAGED FILES:
 {files_list}
 
 RAW DIFF:
-{diff[:4000]}
+{diff[:RAW_DIFF_PROMPT_LIMIT]}
 
 Generate a Conventional Commit message. 
-The 'type' MUST be one of: feat, fix, docs, style, refactor, test, chore.
+The 'type' MUST be one of: {', '.join(COMMIT_TYPES)}.
 The 'scope' should be the primary module or component affected.
 The 'message' should be a high-level summary.
 The 'body' MUST be a list of strings explaining rationale and impact.
@@ -125,7 +132,11 @@ The 'body' MUST be a list of strings explaining rationale and impact.
             return f"{header}\n\n{body}"
 
         except (ValidationError, Exception) as e:
-            logger.warning(f"Generation failed: {e}")
+            err_msg = str(e)
+            if "nodename nor servname provided" in err_msg or "connection" in err_msg.lower():
+                logger.warning(f"Connection failed: Internet is not available or connection not established. ({err_msg})")
+            else:
+                logger.warning(f"Generation failed: {err_msg}")
             return None
 
     finally:
