@@ -4,8 +4,8 @@
 The ultimate TUI + AI wrapper for Git.
 
 <p align="center">
-  <img src="docs/diagrams/graph.png" alt="Grit Streak" width="400" />
-  <img src="docs/diagrams/anime-typing.gif" alt="Grit Power" width="400" />
+  <img src="diagrams/graph.png" alt="Grit Streak" width="400" />
+  <img src="diagrams/anime-typing.gif" alt="Grit Power" width="400" />
 </p>
 
 ### 🎯 The "Pure UX" Mode

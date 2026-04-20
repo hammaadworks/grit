@@ -8,7 +8,7 @@ hide:
 
 **The intelligent `git commit` wrapper that keeps your GitHub graph perfectly consistent with a unified backdated history.**
 
-![Anime Typing Hacker Meme](diagrams/anime-typing.gif)
+![Anime Typing Hacker Meme](../diagrams/anime-typing.gif)
 
 <div class="grid cards" markdown>
 -   **No More Ghost Towns**

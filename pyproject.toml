@@ -1,6 +1,6 @@
 [project]
 name = "git2grit"
-version = "0.0.1"
+version = "0.0.2"
 description = "Git on TUI steroids with OCD! Transform your Git history with AI-powered commit messages and streak protection."
 readme = "README.md"
 license = "MIT"
@@ -33,6 +33,7 @@ packages = ["src/grit"]
 include = [
     "src/grit",
     "README.md",
+    "diagrams",
     "pyproject.toml",
     "LICENSE",
 ]

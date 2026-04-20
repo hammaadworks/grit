@@ -45,7 +45,7 @@ export default function RootLayout({
     "operatingSystem": "Linux, macOS, Windows",
     "applicationCategory": "DeveloperApplication",
     "description": "An intelligent git wrapper that uses CommitScribe AI to maintain a consistent contribution graph.",
-    "softwareVersion": "0.0.1",
+    "softwareVersion": "0.0.2",
     "offers": {
       "@type": "Offer",
       "price": "0",
