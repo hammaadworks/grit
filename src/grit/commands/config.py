@@ -37,166 +37,169 @@ def run_config_interactive(state: StateManager):
     from grit.ui import set_terminal_title
     set_terminal_title("Grit — Configuration")
 
-    # Interactive Settings Schema
-    options = [
-        {"id": "target", "title": "Daily Commit Target *",
-         "desc": "Maximum commits to allocate per calendar day.", "key": "daily_target",
-         "default": "1"},
-        {"id": "start", "title": "Timeline Start Date *",
-         "desc": "The historical boundary for backfilling (YYYY-MM-DD).",
-         "key": "start_date", "default": datetime.now().strftime("%Y-%m-%d")},
-        {"id": "fill", "title": "Allocation Strategy *",
-         "desc": "Where to fill gaps from (today or start_date).",
-         "key": "fill_strategy", "default": "start_date"},
-        {"id": "user", "title": "GitHub Identity *",
-         "desc": "Your public username for contribution graph integration.",
-         "key": "github_username", "default": "Not configured"},
-        {"id": "ai_url", "title": "AI: Base URL",
-         "desc": "LLM API endpoint (e.g. http://localhost:11434/v1 for Ollama, "
-                 "or Anthropic/Groq).",
-         "key": "ai_base_url", "default": "Not configured"},
-        {"id": "ai_key", "title": "AI: API Key",
-         "desc": "Your API token for the LLM provider (leave blank for local models).",
-         "key": "ai_api_key", "default": ""},
-        {"id": "ai_model", "title": "AI: Model Name",
-         "desc": "The model to use (e.g. llama3 for Ollama, claude-3-haiku-20240307).",
-         "key": "ai_model", "default": "Not configured"},
-        {"id": "editor", "title": "Editor: Command",
-         "desc": "Command to open your preferred graphical editor (e.g., 'code --wait', 'subl -w', 'atom -w', 'nano').",
-         "key": "editor_command", "default": ""},
-    ]
+    try:
+        # Interactive Settings Schema
+        options = [
+            {"id": "target", "title": "Daily Commit Target *",
+             "desc": "Maximum commits to allocate per calendar day.", "key": "daily_target",
+             "default": "1"},
+            {"id": "start", "title": "Timeline Start Date *",
+             "desc": "The historical boundary for backfilling (YYYY-MM-DD).",
+             "key": "start_date", "default": datetime.now().strftime("%Y-%m-%d")},
+            {"id": "fill", "title": "Allocation Strategy *",
+             "desc": "Where to fill gaps from (today or start_date).",
+             "key": "fill_strategy", "default": "start_date"},
+            {"id": "user", "title": "GitHub Identity *",
+             "desc": "Your public username for contribution graph integration.",
+             "key": "github_username", "default": "Not configured"},
+            {"id": "ai_url", "title": "AI: Base URL",
+             "desc": "LLM API endpoint (e.g. http://localhost:11434/v1 for Ollama, "
+                     "or Anthropic/Groq).",
+             "key": "ai_base_url", "default": "Not configured"},
+            {"id": "ai_key", "title": "AI: API Key",
+             "desc": "Your API token for the LLM provider (leave blank for local models).",
+             "key": "ai_api_key", "default": ""},
+            {"id": "ai_model", "title": "AI: Model Name",
+             "desc": "The model to use (e.g. llama3 for Ollama, claude-3-haiku-20240307).",
+             "key": "ai_model", "default": "Not configured"},
+            {"id": "editor", "title": "Editor: Command",
+             "desc": "Command to open your preferred graphical editor (e.g., 'code --wait', 'subl -w', 'atom -w', 'nano').",
+             "key": "editor_command", "default": ""},
+        ]
 
-    # Session State: Load everything into memory first.
-    # We only write to disk when the user explicitly saves with 'S'.
-    session_config = {
-        opt["key"]: state.get_config(opt["key"]) or opt["default"]
-        for opt in options
-    }
+        # Session State: Load everything into memory first.
+        # We only write to disk when the user explicitly saves with 'S'.
+        session_config = {
+            opt["key"]: state.get_config(opt["key"]) or opt["default"]
+            for opt in options
+        }
 
-    selected_idx = 0
-    error_msg = ""
+        selected_idx = 0
+        error_msg = ""
 
-    with Live(auto_refresh=False, console=console, screen=True) as live:
-        while True:
-            # 1. Build the Menu UI
-            grid = Table.grid(expand=True)
-            grid.add_column(justify="left")
+        with Live(auto_refresh=False, console=console, screen=True) as live:
+            while True:
+                # 1. Build the Menu UI
+                grid = Table.grid(expand=True)
+                grid.add_column(justify="left")
 
-            # Header / Banner (Included in Live grid to ensure persistence in alternate screen)
-            grid.add_row(get_banner_layout())
+                # Header / Banner (Included in Live grid to ensure persistence in alternate screen)
+                grid.add_row(get_banner_layout())
 
-            # Settings Table
-            table = Table(box=None, padding=(0, 2), show_header=False, expand=True)
-            table.add_column("Cursor", width=3)
-            table.add_column("Setting", width=25)
-            table.add_column("Value")
+                # Settings Table
+                table = Table(box=None, padding=(0, 2), show_header=False, expand=True)
+                table.add_column("Cursor", width=3)
+                table.add_column("Setting", width=25)
+                table.add_column("Value")
 
-            for i, opt in enumerate(options):
-                val = session_config[opt["key"]]
-                is_selected = (i == selected_idx)
+                for i, opt in enumerate(options):
+                    val = session_config[opt["key"]]
+                    is_selected = (i == selected_idx)
 
-                cursor = " ▶ " if is_selected else "   "
-                style = f"bold {BRAND_COLOR}" if is_selected else "dim"
-                val_style = "bold white" if is_selected else "dim"
+                    cursor = " ▶ " if is_selected else "   "
+                    style = f"bold {BRAND_COLOR}" if is_selected else "dim"
+                    val_style = "bold white" if is_selected else "dim"
 
-                table.add_row(
-                    Text(cursor, style=style),
-                    Text(opt["title"], style=style),
-                    Text(str(val), style=val_style)
-                )
-                
-                if is_selected:
                     table.add_row(
-                        "",
-                        Text(f"└─ {opt['desc']}", style="dim italic"),
-                        ""
+                        Text(cursor, style=style),
+                        Text(opt["title"], style=style),
+                        Text(str(val), style=val_style)
                     )
+                    
+                    if is_selected:
+                        table.add_row(
+                            "",
+                            Text(f"└─ {opt['desc']}", style="dim italic"),
+                            ""
+                        )
 
-            grid.add_row(Padding(table, (0, 2)))
+                grid.add_row(Padding(table, (0, 2)))
 
-            # Footer / Help
-            footer = Table.grid(expand=True)
-            help_text = Text("\n [↑↓] Navigate  [Enter] Edit/Toggle  [S] Sync & Save  [Q] Discard & Exit", style="dim")
-            footer.add_row(Padding(help_text, (0, 4)))
-            
-            if error_msg:
-                err_text = Text(f"✗ {error_msg}", style=f"bold {ERROR_COLOR}")
-                footer.add_row(Padding(err_text, (1, 4)))
+                # Footer / Help
+                footer = Table.grid(expand=True)
+                help_text = Text("\n [↑↓] Navigate  [Enter] Edit/Toggle  [S] Sync & Save  [Q] Discard & Exit", style="dim")
+                footer.add_row(Padding(help_text, (0, 4)))
                 
-            grid.add_row(footer)
+                if error_msg:
+                    err_text = Text(f"✗ {error_msg}", style=f"bold {ERROR_COLOR}")
+                    footer.add_row(Padding(err_text, (1, 4)))
+                    
+                grid.add_row(footer)
 
-            live.update(grid, refresh=True)
+                live.update(grid, refresh=True)
 
-            # 2. Handle Input
-            try:
-                key = get_key(timeout=0.1)
-                if key is None:
-                    continue
-            except KeyboardInterrupt:
-                break
+                # 2. Handle Input
+                try:
+                    key = get_key(timeout=0.1)
+                    if key is None:
+                        continue
+                except KeyboardInterrupt:
+                    break
 
-            if key == 'q' or key == 'Q':
-                # Explicitly do NOT save anything to state here.
-                break
-            elif key == '\x1b[A':  # Up
-                selected_idx = (selected_idx - 1) % len(options)
-                error_msg = ""
-            elif key == '\x1b[B':  # Down
-                selected_idx = (selected_idx + 1) % len(options)
-                error_msg = ""
-            elif key == '\r':  # Enter (Edit/Toggle)
-                opt = options[selected_idx]
-                
-                if opt["id"] == "fill":
-                    # Instant toggle for strategy (Session only)
-                    current = session_config[opt["key"]]
-                    new_val = "today" if current == "start_date" else "start_date"
-                    session_config[opt["key"]] = new_val
+                if key == 'q' or key == 'Q':
+                    # Explicitly do NOT save anything to state here.
+                    break
+                elif key == '\x1b[A':  # Up
+                    selected_idx = (selected_idx - 1) % len(options)
                     error_msg = ""
-                else:
-                    live.stop()
-                    current_val = session_config[opt["key"]]
-                    console.print(f"\n [bold {ACCENT_COLOR}]Editing {opt['title']}[/]")
-                    console.print(f" [dim]Current: {current_val}[/]")
-                    new_val = input(f" New value: ").strip()
-
-                    # Validation
-                    if opt["id"] == "target" and not validate_int(new_val):
-                        error_msg = "Target must be a positive integer."
-                    elif opt["id"] == "start" and not validate_date(new_val):
-                        error_msg = "Date must be YYYY-MM-DD."
-                    elif new_val:
+                elif key == '\x1b[B':  # Down
+                    selected_idx = (selected_idx + 1) % len(options)
+                    error_msg = ""
+                elif key == '\r':  # Enter (Edit/Toggle)
+                    opt = options[selected_idx]
+                    
+                    if opt["id"] == "fill":
+                        # Instant toggle for strategy (Session only)
+                        current = session_config[opt["key"]]
+                        new_val = "today" if current == "start_date" else "start_date"
                         session_config[opt["key"]] = new_val
                         error_msg = ""
+                    else:
+                        live.stop()
+                        current_val = session_config[opt["key"]]
+                        console.print(f"\n [bold {ACCENT_COLOR}]Editing {opt['title']}[/]")
+                        console.print(f" [dim]Current: {current_val}[/]")
+                        new_val = input(f" New value: ").strip()
 
-                    live.start()
-            elif key == 's' or key == 'S':
-                # Persist Session to Database
-                for k, v in session_config.items():
-                    state.set_config(k, v)
+                        # Validation
+                        if opt["id"] == "target" and not validate_int(new_val):
+                            error_msg = "Target must be a positive integer."
+                        elif opt["id"] == "start" and not validate_date(new_val):
+                            error_msg = "Date must be YYYY-MM-DD."
+                        elif new_val:
+                            session_config[opt["key"]] = new_val
+                            error_msg = ""
 
-                live.stop()
-                print_banner()
-                username = session_config["github_username"]
-                start_date = session_config["start_date"]
+                        live.start()
+                elif key == 's' or key == 'S':
+                    # Persist Session to Database
+                    for k, v in session_config.items():
+                        state.set_config(k, v)
 
-                if username and username != "Not configured" and start_date:
-                    with console.status(
-                            f"[{BRAND_COLOR}]✦ Synchronizing contribution graph for "
-                            f"@{username}...[/{BRAND_COLOR}]"
-                            ):
-                        sync_historical_data(state, str(username), str(start_date))
-                    console.print(
-                        f"[{SUCCESS_COLOR}]✓ Sync complete. Grit is now "
-                        f"hyper-optimized.[/{SUCCESS_COLOR}]"
-                        )
-                else:
-                    console.print(
-                        f"[{WARN_COLOR}]⚠ Username/Start date not set. Skipping "
-                        f"sync.[/{WARN_COLOR}]"
-                        )
+                    live.stop()
+                    print_banner()
+                    username = session_config["github_username"]
+                    start_date = session_config["start_date"]
 
-                import time
-                time.sleep(1)
-                break
+                    if username and username != "Not configured" and start_date:
+                        with console.status(
+                                f"[{BRAND_COLOR}]✦ Synchronizing contribution graph for "
+                                f"@{username}...[/{BRAND_COLOR}]"
+                                ):
+                            sync_historical_data(state, str(username), str(start_date))
+                        console.print(
+                            f"[{SUCCESS_COLOR}]✓ Sync complete. Grit is now "
+                            f"hyper-optimized.[/{SUCCESS_COLOR}]"
+                            )
+                    else:
+                        console.print(
+                            f"[{WARN_COLOR}]⚠ Username/Start date not set. Skipping "
+                            f"sync.[/{WARN_COLOR}]"
+                            )
+
+                    import time
+                    time.sleep(1)
+                    break
+    finally:
+        set_terminal_title("Grit")
 

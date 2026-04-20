@@ -1,7 +1,10 @@
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
-
+from pathlib import Path
+from time import time
 import typer
 from rich.live import Live
 from rich.padding import Padding
@@ -9,6 +12,10 @@ from rich.prompt import Confirm
 from rich.table import Table
 from rich.text import Text
 
+from grit.constants import (
+    COMMIT_TYPES, DIFF_TRUNCATION_LIMIT, UI_REFRESH_RATE, 
+    STAGE_PICKER_OVERHEAD_LINES, KEY_READ_TIMEOUT
+)
 from grit.ai import generate_commit_message
 from grit.allocator import DateAllocator
 from grit.commands.status import run_status
@@ -33,10 +40,7 @@ from grit.ui import (
 )
 
 
-COMMIT_TYPES = ["feat", "fix", "docs", "style", "refactor", "test", "chore"]
-
-
-def run_commit(state: StateManager, ctx: typer.Context, verbose: bool = False):
+def run_commit(state: StateManager, ctx: typer.Context, verbose: bool = False, ai: bool = False):
     """
     The core wrapper for `git commit`. Automatically allocates dates to preserve streaks.
     Run without arguments to enter the Interactive AI DevX Wizard.
@@ -47,9 +51,88 @@ def run_commit(state: StateManager, ctx: typer.Context, verbose: bool = False):
         _run_passthrough_commit(state, args)
         return
 
+    console.clear()
     selected = _interactive_stage_picker()
     _sync_staging_area(selected)
 
+    # AI Logic: Only trigger if explicitly requested via flag or later in the menu
+    ai_key = state.get_config("ai_api_key")
+    ai_url = state.get_config("ai_base_url")
+    ai_model = state.get_config("ai_model")
+    has_ai_config = ai_key and ai_key != "Not configured" and ai_key != ""
+    
+    if ai and has_ai_config:
+        # CRITICAL: We MUST sync the staging area first so get_staged_diff() sees the user's selection
+        _sync_staging_area(selected)
+        
+        diff = get_staged_diff()
+        if diff:
+            from grit.executor import get_diff_hash
+            diff_hash = get_diff_hash(diff)
+            draft = state.get_draft(diff_hash)
+
+            if draft and draft["status"] == "pending":
+                console.print(f"\n[{WARN_COLOR}]✨ AI generation is already in progress for these files.[/{WARN_COLOR}]")
+                console.print(f"[dim]Monitor progress: [bold white]tail -f ~/.config/grit/ai_bg_{diff_hash}.log[/bold white][/dim]\n")
+                return
+
+            if not draft or draft["status"] == "failure":
+                # Write "pending" state immediately to DB to block other processes
+                state.set_draft(diff_hash, "", status="pending")
+
+                # DETACHED PATH: Spawn a truly independent process and exit
+                console.print(f"\n[{BRAND_COLOR}]✨ AI generation backgrounded.[/{BRAND_COLOR}]")
+                console.print(f"[dim]CommitScribe will notify you when it's done. You can then run `grit commit` to review and finalize.[/dim]")
+                
+                # Ensure the log directory exists
+                from grit.state import DEFAULT_DB_DIR
+                DEFAULT_DB_DIR.mkdir(parents=True, exist_ok=True)
+                log_file_name = f"ai_bg_{diff_hash}.log"
+                log_path = DEFAULT_DB_DIR / log_file_name
+                log_path.touch(exist_ok=True)
+                
+                console.print(f"[dim]Monitor progress: [bold white]tail -f ~/.config/grit/{log_file_name}[/bold white][/dim]\n")
+                
+                # Write diff to temp file for the background process
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as tf:
+                    tf.write(diff)
+                    tf.flush()
+                    temp_diff_path = tf.name
+
+                # Spawn hidden internal command in a new session
+                try:
+                    from grit.ui import suppress_title_reset
+                    suppress_title_reset()
+                    
+                    # Use 'uv run' to ensure we run with the correct dependencies and local source
+                    # This is more robust than calling python or the installed binary directly
+                    base_cmd = ["uv", "run", "grit", "_ai-internal", temp_diff_path, diff_hash]
+                    
+                    # Use environment to ensure package visibility
+                    env = os.environ.copy()
+                    
+                    # Open the log file for the subprocess to write to directly (append mode)
+                    log_f = open(log_path, "a", buffering=1)
+                    log_f.write(f"\n--- Starting background process at {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+                    log_f.write(f"Command: {' '.join(base_cmd)}\n")
+                    log_f.flush()
+                    
+                    subprocess.Popen(
+                        base_cmd,
+                        stdout=log_f,
+                        stderr=log_f,
+                        stdin=subprocess.DEVNULL,
+                        start_new_session=True, # New process group
+                        close_fds=True,         # Close all parent file descriptors
+                        env=env
+                    )
+                except Exception as e:
+                    if verbose: console.print(f"[red]Failed to background: {e}[/red]")
+                
+                # Exit early since we are backgrounding
+                return
+
+    # Enter the message flow (no pre-baking background thread)
     final_msg = _interactive_commit_message_flow(state, ctx, verbose=verbose)
     _finalize_commit(state, final_msg)
 
@@ -59,45 +142,68 @@ def run_commit(state: StateManager, ctx: typer.Context, verbose: bool = False):
 # =========================
 
 def _interactive_stage_picker():
-    status_files = get_status_files()
-    files = [f for f, _ in status_files]
-    status_map = {f: s for f, s in status_files}
-    staged_files = get_staged_files()
+    from grit.ui import set_terminal_title
+    set_terminal_title("Grit — Staging")
+    try:
+        status_files = get_status_files()
+        files = [f for f, _ in status_files]
+        status_map = {f: s for f, s in status_files}
+        staged_files = get_staged_files()
 
-    if not files:
-        console.print(f"[{WARN_COLOR}]No changes to commit.[/{WARN_COLOR}]")
-        raise typer.Exit(0)
+        if not files:
+            console.print(f"[{WARN_COLOR}]No changes to commit.[/{WARN_COLOR}]")
+            raise typer.Exit(0)
 
-    root_tree = _build_file_tree(files)
-    items = _build_tree_items(root_tree, files, status_map)
+        root_tree = _build_file_tree(files)
+        items = _build_tree_items(root_tree, files, status_map)
 
-    selected = set(staged_files)
-    idx = 0
-    visible_count = 12
-    scroll_offset = 0
+        selected = set(staged_files)
+        idx = 0
+        scroll_offset = 0
 
-    with Live(auto_refresh=False, console=console, screen=False) as live:
-        while True:
-            visible_items = _get_visible_items(items)
-            idx, scroll_offset = _clamp_cursor(idx, scroll_offset, visible_items, visible_count)
+        # Use screen=False to allow history to persist on the terminal
+        with Live(auto_refresh=False, console=console, screen=False) as live:
+            last_size = console.size
+            
+            def render():
+                nonlocal idx, scroll_offset
+                # Dynamically calculate height to be as big as possible (overhead lines defined in constants)
+                v_count = max(5, console.height - STAGE_PICKER_OVERHEAD_LINES)
+                v_items = _get_visible_items(items)
+                idx, scroll_offset = _clamp_cursor(idx, scroll_offset, v_items, v_count)
+                live.update(_render_stage_picker(v_items, idx, scroll_offset, v_count, selected), refresh=True)
 
-            live.update(
-                _render_stage_picker(visible_items, idx, scroll_offset, visible_count, selected),
-                refresh=True
-            )
+            render() # Initial render
 
-            key = get_key()
-            action = _handle_stage_picker_key(key, visible_items, idx, selected)
+            while True:
+                key = get_key(timeout=KEY_READ_TIMEOUT)
+                
+                if console.size != last_size:
+                    last_size = console.size
+                    render()
+                    if key is None: continue
 
-            if action == "abort":
-                console.print("[dim]Aborted.[/dim]")
-                raise typer.Exit(0)
-            elif action == "confirm":
-                break
-            elif action == "up":
-                idx = (idx - 1) % len(visible_items)
-            elif action == "down":
-                idx = (idx + 1) % len(visible_items)
+                if key is None:
+                    continue
+
+                # Process key first
+                visible_items = _get_visible_items(items)
+                action = _handle_stage_picker_key(key, visible_items, idx, selected)
+
+                if action == "abort":
+                    console.print("[dim]Aborted.[/dim]")
+                    raise typer.Exit(0)
+                elif action == "confirm":
+                    break
+                elif action == "up":
+                    idx = (idx - 1) % len(visible_items)
+                elif action == "down":
+                    idx = (idx + 1) % len(visible_items)
+                
+                # Re-render immediately after state change
+                render()
+    finally:
+        set_terminal_title("Grit")
 
     if not selected:
         console.print("[dim]Aborted. No files selected.[/dim]")
@@ -368,11 +474,21 @@ def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context, ve
     ai_url = state.get_config("ai_base_url")
     ai_model = state.get_config("ai_model")
 
-    options = _build_commit_options(ai_key)
+    # Check if a draft is already ready for the currently staged diff
+    from grit.executor import get_staged_diff, get_diff_hash
+    diff = get_staged_diff()
+    has_draft = False
+    if diff:
+        diff_hash = get_diff_hash(diff)
+        draft = state.get_draft(diff_hash)
+        has_draft = draft and draft["status"] == "success"
+
+    options = _build_commit_options(ai_key, has_draft=has_draft)
     idx = 0
 
     while True:
         console.print()
+
         choice, idx = run_selection_menu(
             "Select commit type:",
             options,
@@ -388,16 +504,31 @@ def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context, ve
             subprocess.run(["git", "reset"])
             return run_commit(state, ctx, verbose=verbose)
 
-        if choice == "✨ Auto-generate (AI)":
-            msg = _generate_ai_commit_message(ai_url, ai_key, ai_model, verbose=verbose)
+        if choice in ["✨ Auto-generate (AI)", "✨ Use AI Draft (Ready)"]:
+            force = (choice == "✨ Auto-generate (AI)" and has_draft)
+            msg = _generate_ai_commit_message(ai_url, ai_key, ai_model, state=state, verbose=verbose, force=force)
             if msg:
                 final = _edit_ai_commit_message(msg)
                 if final == "RETRY_MENU":
+                    # If we just generated a new one, has_draft will be true next time
+                    if msg:
+                        diff = get_staged_diff()
+                        if diff:
+                            has_draft = True
+                            options = _build_commit_options(ai_key, has_draft=has_draft)
                     continue
                 if final:
                     return final
-                # If final is None, loop again (Regenerate)
-            idx = options.index("feat")
+
+            # If failed, refresh draft status and options
+            diff = get_staged_diff()
+            if diff:
+                diff_hash = get_diff_hash(diff)
+                draft = state.get_draft(diff_hash)
+                has_draft = draft and draft["status"] == "success"
+                options = _build_commit_options(ai_key, has_draft=has_draft)
+
+            idx = options.index("feat") if "feat" in options else 0
             continue
 
 
@@ -407,60 +538,94 @@ def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context, ve
         console.print(f"[{ERROR_COLOR}]Unexpected choice: {choice}. Please try again.[/]")
 
 
-def _build_commit_options(ai_key):
+def _build_commit_options(ai_key, has_draft: bool = False):
     options = []
     if ai_key and ai_key != "Not configured" and ai_key != "":
         options.append("✨ Auto-generate (AI)")
+        if has_draft:
+            options.append("✨ Use AI Draft (Ready)")
     options.extend(COMMIT_TYPES)
     options.append("↩ Go Back")
     return options
 
 
-def _generate_ai_commit_message(ai_url, ai_key, ai_model, verbose: bool = False):
+def _generate_ai_commit_message(ai_url, ai_key, ai_model, state: StateManager, verbose: bool = False, force: bool = False):
     import time
-    from concurrent.futures import ThreadPoolExecutor
     from rich.spinner import Spinner
     from rich.columns import Columns
+    from grit.executor import get_diff_hash
 
     diff = get_staged_diff()
+    if not diff:
+        return None
+        
+    diff_hash = get_diff_hash(diff)
+    
+    # Check for cached draft first unless forced
+    if not force:
+        draft = state.get_draft(diff_hash)
+        if draft and draft["status"] == "success":
+            if verbose: console.print(f"[{SUCCESS_COLOR}]✨ Using cached draft.[/{SUCCESS_COLOR}]")
+            return draft["message"]
+
     start_time = time.time()
     
-    with Live(console=console, refresh_per_second=10) as live:
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            # Start AI generation in a background thread
-            future = executor.submit(
-                generate_commit_message, diff, ai_url, ai_key, ai_model, verbose
-            )
-            
-            # Keep the UI alive and updating while the thread is running
-            while not future.done():
-                elapsed = time.time() - start_time
-                ui = Columns([
-                    Spinner("dots12", style=BRAND_COLOR),
-                    Text.from_markup(
-                        f" [bold {BRAND_COLOR}]CommitScribe analyzing diff...[/bold {BRAND_COLOR}] "
-                        f"[dim]({elapsed:.1f}s)[/dim]"
-                    )
-                ])
-                live.update(ui)
-                time.sleep(0.1) # Small sleep to prevent CPU hammering
-            
+    # Limit diff size for AI if it's massive to save memory/tokens
+    if len(diff) > DIFF_TRUNCATION_LIMIT:
+        if verbose: console.print(f"[{WARN_COLOR}]⚠ Diff too large ({len(diff)} chars), trimming context.[/{WARN_COLOR}]")
+        diff = diff[:DIFF_TRUNCATION_LIMIT] + "\n... (Diff truncated for memory optimization)"
+
+    last_error = None
+    with Live(console=console, refresh_per_second=UI_REFRESH_RATE) as live:
+        from concurrent.futures import ThreadPoolExecutor
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(
+            generate_commit_message, diff, ai_url, ai_key, ai_model, verbose
+        )
+        
+        # Keep the UI alive and updating while the thread is running
+        while not future.done():
+            elapsed = time.time() - start_time
+            ui = Columns([
+                Spinner("dots12", style=BRAND_COLOR),
+                Text.from_markup(
+                    f" [bold {BRAND_COLOR}]CommitScribe analyzing diff...[/bold {BRAND_COLOR}] "
+                    f"[dim]({elapsed:.1f}s)[/dim]"
+                )
+            ])
+            live.update(ui)
+            time.sleep(KEY_READ_TIMEOUT) # Small sleep to prevent CPU hammering
+        
+        try:
             msg = future.result()
+            if msg:
+                state.set_draft(diff_hash, msg)
+        except Exception as e:
+            last_error = e
+            if verbose: console.print(f"[red]Error: {e}[/red]")
+            msg = None
             
-            # Final update with the total time
-            total_elapsed = time.time() - start_time
-            live.update(
-                Text.from_markup(f"    [{SUCCESS_COLOR}]✓ CommitScribe analysis complete ({total_elapsed:.1f}s)[/{SUCCESS_COLOR}]")
-            )
+        # Final update with the total time
+        total_elapsed = time.time() - start_time
+        live.update(
+            Text.from_markup(f"    [{SUCCESS_COLOR}]✓ CommitScribe analysis complete ({total_elapsed:.1f}s)[/{SUCCESS_COLOR}]")
+        )
 
     if msg:
         return msg
 
-    err_console.print(
-        f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]"
-    )
+    if last_error:
+        err_msg = str(last_error)
+        if "nodename nor servname provided" in err_msg or "connection" in err_msg.lower():
+             err_console.print(f"[{ERROR_COLOR}]✗ Internet is not available or connection not established.[/{ERROR_COLOR}]")
+             err_console.print(f"[dim]Detailed error: {err_msg}[/dim]")
+        else:
+             err_console.print(f"[{ERROR_COLOR}]✗ AI generation failed: {err_msg}[/{ERROR_COLOR}]")
+    else:
+        err_console.print(
+            f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]"
+        )
     return None
-
 
 def _manual_commit_message(type_prefix):
     scope_value = _prompt_commit_scope()
@@ -507,29 +672,53 @@ def _edit_ai_commit_message(initial_text: str):
     console.print("\n\n[bold bright_cyan]AI Draft:[/bold bright_cyan]\n")
     console.print(Panel(initial_text, border_style=BRAND_COLOR, padding=(1, 2), title="Draft Review", title_align="left"))
     
-    options = ["✅ Confirm & Commit", "📝 Edit in Editor", "✨ Fine-tune Here", "🔄 Regenerate", "↩ Go Back"]
+    options = ["✅ Confirm & Commit", "📝 Edit in Editor", "🔄 Regenerate", "↩ Go Back"]
     choice, _ = run_selection_menu("Accept this commit message?", options, show_banner=False)
 
     if choice == "✅ Confirm & Commit":
         return initial_text
         
     if choice == "📝 Edit in Editor":
-        # Professional standard: open preferred system editor
-        editor = os.environ.get('EDITOR', 'vi')
-        with tempfile.NamedTemporaryFile(suffix=".gitmessage", mode='w', delete=False) as tf:
-            tf.write(initial_text)
-            path = tf.name
+        temp_file_path = None # Initialize to None for finally block
         try:
-            subprocess.call([editor, path])
-            with open(path, 'r') as f:
-                edited = f.read().strip()
-                if not edited:
-                    console.print("[dim]Aborted: Empty message.[/dim]")
-                    raise typer.Exit(0)
-                return edited
+            with tempfile.NamedTemporaryFile(mode="w+", delete=False, encoding="utf-8") as temp_file:
+                temp_file.write(initial_text)
+                temp_file_path = temp_file.name # Get the name of the created temp file
+
+            # Get editor command from state manager, or fallback to sensible defaults
+            state_manager = StateManager()
+            editor_command = state_manager.get_config("editor_command")
+
+            if not editor_command:
+                # Default logic for different OS
+                if sys.platform == "darwin": # macOS
+                    editor_command = "open -e" # TextEdit
+                elif sys.platform.startswith("win"): # Windows
+                    editor_command = "notepad.exe" # Notepad
+                else: # Linux and others
+                    # Prioritize VS Code if available, otherwise fall back to EDITOR env var, then nano
+                    if shutil.which("code"):
+                        editor_command = "code --wait"
+                    else:
+                        editor_command = os.environ.get("EDITOR", "nano")
+
+            console.print(f"[dim]Opening editor: [bold]{editor_command} {temp_file_path}[/bold][/dim]")
+            subprocess.run(f"{editor_command} {temp_file_path}", shell=True, check=True) # blocking call
+
+            with open(temp_file_path, "r", encoding="utf-8") as f:
+                edited_text = f.read()
+
+            if not edited_text.strip():
+                console.print("[dim]Aborted: Empty message.[/dim]")
+                raise typer.Exit(0)
+
+            return edited_text
+        except Exception as e:
+            err_console.print(f"[bold red]Error opening editor:[/bold red] {e}")
+            return "RETRY_MENU" # Or some other appropriate error handling
         finally:
-            if os.path.exists(path):
-                os.unlink(path)
+            if temp_file_path and Path(temp_file_path).exists():
+                os.remove(temp_file_path)
 
     if choice == "✨ Fine-tune Here":
         # The granular terminal flow for small fixes without leaving the shell
@@ -688,6 +877,17 @@ def _finalize_commit(state: StateManager, final_msg):
 
     if _execute_multiline_git_commit(final_msg, target_date, state):
         console.print(f"[{SUCCESS_COLOR}]✓ Commit successfully distributed.[/{SUCCESS_COLOR}]")
+        
+        # Cleanup: If this was a cached draft, delete its log file
+        try:
+            from grit.executor import get_staged_diff, get_diff_hash
+            diff = get_staged_diff()
+            if diff:
+                h = get_diff_hash(diff)
+                log_file = state.db_path.parent / f"ai_bg_{h}.log"
+                log_file.unlink(missing_ok=True)
+        except: pass
+
         _post_commit_actions(state)
     else:
         console.print(f"[{WARN_COLOR}]⚠ Commit cancelled or failed.[/{WARN_COLOR}]")

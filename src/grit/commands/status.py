@@ -10,6 +10,7 @@ from rich.table import Table
 from rich.text import Text
 
 from grit import __version__
+from grit.constants import HOUR_SECONDS
 from grit.allocator import DateAllocator
 from grit.commands.sync import _sync_github
 from grit.state import StateManager
@@ -33,7 +34,7 @@ def run_status(state: StateManager, yes: bool = False):
     last_update_check = state.get_config("last_update_check")
     today_date = datetime.now().strftime("%Y-%m-%d")
     
-    needs_sync = username and (time.time() - last_sync) > 3600
+    needs_sync = username and (time.time() - last_sync) > HOUR_SECONDS
     needs_update_check = last_update_check != today_date
     
     if needs_sync or needs_update_check:
