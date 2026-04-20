@@ -7,6 +7,7 @@ license = "MIT"
 authors = [
     { name = "hammaadworks", email = "hammaadworks@gmail.com" }
 ]
+urls = { Homepage = "https://grit.hammaadworks.com", Repository = "https://github.com/hammaadworks/grit", Issues = "https://github.com/hammaadworks/grit/issues" }
 requires-python = ">=3.10"
 dependencies = [
     "beautifulsoup4>=4.14.3",
@@ -22,14 +23,18 @@ dependencies = [
 grit = "grit.cli:app"
 
 [build-system]
-requires = ["uv-build"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grit"]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/grit",
     "README.md",
     "pyproject.toml",
+    "LICENSE",
 ]
 exclude = [
     "website/",
