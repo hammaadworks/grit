@@ -1,83 +1,102 @@
-# 🧱 Grit
+# git2grit
 
-> The intelligent `git commit` wrapper that keeps your GitHub graph perfectly consistent with a unified backdated history.
+**Git on steroids. Chronic streak OCD.**
+The ultimate TUI + AI wrapper for Git.
 
-You code every day, but maybe you batch your commits or work on side projects sporadically. The result is a GitHub contribution graph that looks sparse. **Grit fixes this.**
+<p align="center">
+  <img src="docs/diagrams/graph.png" alt="Grit Streak" width="400" />
+  <img src="docs/diagrams/anime-typing.gif" alt="Grit Power" width="400" />
+</p>
 
-Instead of generating fake work, Grit takes your *real* work and intelligently distributes it across a timeline to help you hit a specific daily commit target. It does this by dynamically calculating and injecting both `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` into your commits to ensure a consistent, uniform history.
+### 🎯 The "Pure UX" Mode
+Just here for the beautiful TUI and AI? Set `target = 0` in `grit config`. 
+No date manipulation. No history rewrites. Just an elite Git experience.
 
-## 🚀 The Features
+`uv tool install git2grit`
 
-- **No More Ghost Towns:** Set a daily commit target and let Grit mathematically distribute your commits.
-- **AI-Powered Semantic Commits:** Built-in support for Gemini, OpenAI, and Ollama. Grit can analyze your diffs and generate perfect Conventional Commits in the background.
-- **O(1) Allocation Engine:** Uses a blazing-fast SQL engine to find the optimal next commit date instantly.
-- **Interactive Dashboard:** A beautiful, high-fidelity visualization GUI to monitor your graph integrity and pipeline.
-- **Self-Healing Sync:** Scrapes your public GitHub graph to ensure Grit never overwrites days you've already filled.
-- **History Redistributor:** Use `grit spread` to take a batch of existing commits and automatically distribute them across historical gaps.
-- **Zero-Friction Wrapper:** Transparently passes all arguments directly to vanilla `git commit`.
+---
 
-## 📦 Installation
+## 🔥 Experience the Difference
 
-Grit is built with Python. You can install it globally using `uv` (recommended) or `pipx`:
-
-```bash
-uv tool install grit
-# OR
-pipx install grit
+### Boring Git Status
+```text
+$ git status
+On branch master
+Your branch is up to date with 'origin/master'.
+nothing to commit, working tree clean
 ```
 
-Alternatively, you can download the latest source code or wheels from [GitHub Releases](https://github.com/hammaadworks/grit/releases).
+### Grit Intelligence Dashboard
+```text
+$ grit status
+    ██████╗ ██████╗ ██╗████████╗
+    ██╔════╝ ██╔══██╗██║╚══██╔══╝
+    ██║  ███╗██████╔╝██║   ██║
+    ██║   ██║██╔══██╗██║   ██║
+    ╚██████╔╝██║  ██║██║   ██║
+     ╚═════╝ ╚═╝  ╚═╝╚═╝   ╚═╝
+    ✦ v0.0.1 - Intelligently distribute your commits
 
-## 🛠️ Quick Start
+  █░ 1/2 today                                           April Volume: 56
+  ✦ Optimization Progress: 41.9% ━━━━━━━━━━━━━━━━━━━━━━━ 554 COMMITS BEHIND
 
-1. **Configure Grit:**
-   Run the interactive setup wizard or use headless flags for AI configuration.
-   ```bash
-   grit config --ai-key YOUR_KEY --ai-model gemini-1.5-flash
-   ```
+╭────────────────────────── Commit Intelligence Pipeline ──────────────────────────╮
+│                                                                                  │
+│    Date               Timeline           Status                   Load           │
+│    2026-04-22         today               ◆                       1/2            │
+│    2026-04-21         next                ◇                       0/2            │
+│    2026-02-03         then                ◇                       1/2            │
+│    2026-01-27         later               ◇                       0/2            │
+│                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+```
 
-2. **Start Committing:**
-   Use `grit commit` or let the AI do the work with the background flag.
-   ```bash
-   grit commit -m "feat: add super cool new feature"
-   # Or go pragmatic with ai
-   grit commit --ai
-   ```
+---
 
-3. **Check your Status:**
-   View your current daily progress and see where your next commit will land. Use `-y` to skip the repository state prompt.
-   ```bash
-   grit status -y
-   ```
+## 🔥 Features for the Obsessed
 
-4. **Verify Version:**
-   Check your current Grit version.
-   ```bash
-   grit --version
-   ```
+### 🤖 CommitScribe AI (`grit commit`)
+Revamp your commit experience with an elite interactive TUI.
+- **Interactive File Picker:** Fluidly stage/unstage files with a high-fidelity selector.
+- **Deep-Diff Analysis:** Powered by **Pydantic AI**. It understands *why* you changed that line.
+- **Architectural Messages:** Automatically generates professional, context-aware commit messages.
+- **Draft Caching:** Remembers your AI drafts so you never lose a masterpiece.
 
-5. **Visualize History:**
-   See a beautiful, branching, and colorful view of your repository history.
-   ```bash
-   grit log
-   ```
+### 📅 Real-Time Reallocation
+Obsessed with the perfect graph?
+- **Automatic Allocation:** If `target > 0`, Grit intelligently shifts your commit dates *as you code* to ensure your streak never breaks.
+- **Spread Intelligence:** Use `grit spread` to redistribute a range of commits across historical gaps.
 
-6. **Launch the Dashboard:**
-   Open the high-fidelity visualization GUI. It launches in the background by default!
-   ```bash
-   grit dash
-   # To stop the background server:
-   grit dash --stop
-   # To run in foreground:
-   grit dash --logs
-   ```
+### 🛠️ The Control Center (`grit config`)
+A beautiful interactive TUI to manage your "Juice."
+- **AI Configuration:** Effortlessly set up Gemini, OpenAI, or Ollama.
+- **Boundary Setting:** Define your daily targets and historical boundaries.
+- **Strategy Selection:** Choose between `today` or `start_date` allocation patterns.
 
-## ⚠️ Important Disclaimers
+---
 
-* **Collaboration:** Use Grit primarily in **personal or solo projects**. Modifying author dates in heavily collaborative repositories can cause timeline confusion for other developers.
-* **Squash Merges:** Squash merging via the GitHub UI will destroy individual commit dates. Use **rebase** or **merge commits** to preserve Grit's allocated dates.
+## 🛠 Commands at a Glance
 
-## 📖 Documentation & Marketing
+| Command | The Vibe |
+| :--- | :--- |
+| `grit commit` | **The Core.** Elite TUI + AI commit wizard. |
+| `grit status` | **The Hub.** Check metrics, velocity, and streak health. |
+| `grit dash` | **The View.** High-fidelity web-based intelligence dashboard. |
+| `grit spread` | **The Gap Filler.** Redistribute work across history. |
+| `grit log` | **The Flex.** Human-readable logs on jetpack rollerskates. |
+| `grit undo` | **The Oops.** Regress commits and restore state. |
+| `grit config` | **The Control.** Interactive setup and "Pure UX" mode. |
 
-Looking to share this tool or understand exactly how it is built under the hood? 
-Check out our comprehensive [Documentation & Landing Page](https://github.com/hammaadworks/grit) (or visit [grit.hammaadworks.com](https://grit.hammaadworks.com)).
+---
+
+## ⚠️ Disclaimer: History Manipulation
+`git2grit` modifies `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` to protect your streaks. 
+- **Use with precaution on public/shared repos.**
+- **History Rewrites:** Spreading and moving commits will rewrite Git history.
+- **Safe Mode:** Set `target = 0` to disable all date-shifting while keeping the TUI/AI.
+
+---
+
+**Built with ❤️ by [hammaadworks](https://github.com/hammaadworks)**
+
+*Disclaimer: Reflect your real work, don't fake it. Use your powers for good.*
