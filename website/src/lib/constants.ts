@@ -17,7 +17,7 @@ export const SITE_CONFIG = {
 } as const;
 
 export const COMMANDS = {
-  INSTALL: "uv tool install grit",
+  INSTALL: "uv tool install git2grit",
   CONFIG: "grit config",
   COMMIT: "grit commit -m 'feat: logic'",
   STATUS: "grit status",

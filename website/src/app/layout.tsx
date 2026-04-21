@@ -3,8 +3,8 @@ import "./globals.css";
 import { Header, Footer } from "@/components/layout/Navigation";
 
 export const metadata: Metadata = {
-  title: "Grit | CommitScribe AI - The Intelligent Git Wrapper",
-  description: "Keep your GitHub streak unbreakable with CommitScribe AI. Architected for professional developers who value consistency and high-fidelity commit history.",
+  title: "Grit | Git on TUI steroids with OCD.",
+  description: "Git on TUI steroids for the obsessively disciplined. No mid graphs allowed. AI-powered commit distribution for perfectionists.",
   keywords: ["git wrapper", "github streak", "commit history", "ai commit message", "CommitScribe", "git automation", "backdated commits"],
   authors: [{ name: "hammaadworks" }],
   openGraph: {

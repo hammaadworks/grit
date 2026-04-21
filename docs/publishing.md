@@ -74,7 +74,12 @@ uv publish dist/* --token YOUR_PYPI_TOKEN
 
 !!! success "Available Worldwide"
     Once the upload finishes, anyone can install Grit using:
-    `uv tool install grit`
+    `uv tool install git2grit`
+
+### 4.2 Using pip
+```bash
+pip install git2grit
+```
 
 ---
 
@@ -133,7 +138,7 @@ Follow these steps for every major and minor version update to ensure a smooth r
 
 ### 📦 Distribution
 - [ ] **Publish to PyPI**: `uv publish dist/ --token ...`.
-- [ ] **Verify PyPI**: Ensure [pypi.org/project/grit](https://pypi.org/project/grit/) shows the new version.
+- [ ] **Verify PyPI**: Ensure [pypi.org/project/git2grit](https://pypi.org/project/git2grit/) shows the new version.
 
 ### 🐙 Source Control
 - [ ] **Git Tag**: `git tag vX.X.X && git push origin vX.X.X`.
@@ -141,4 +146,4 @@ Follow these steps for every major and minor version update to ensure a smooth r
 
 ### 🌐 Website & Post-Launch
 - [ ] **Deploy Website**: Ensure version and links on [grit.hammaadworks.com](https://grit.hammaadworks.com) are correct.
-- [ ] **Public Verification**: Run `uv tool install grit` on a fresh machine.
+- [ ] **Public Verification**: Run `uv tool install git2grit` on a fresh machine.

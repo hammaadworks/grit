@@ -38,7 +38,7 @@ Instead of Python loops, we use a single SQL query to find the first available d
 ### D. Versioning & Update Logic
 - **Sourcing:** \`__version__\` is defined in \`src/grit/__init__.py\`.
 - **Update Engine:** \`src/grit/updater.py\` performs a daily background check against the remote \`pyproject.toml\`.
-- **Environment Awareness:** Detects \`uv\` vs \`pip\` to provide the correct upgrade command (\`uv tool upgrade grit\` or \`pip install -U grit\`).
+- **Environment Awareness:** Detects `uv` vs `pip` to provide the correct upgrade command (`uv tool upgrade git2grit` or `pip install -U git2grit`).
 - **Notification:** \`grit status\` triggers the check and displays a "New Release" banner if a mismatch is detected.
 
 ## 3. Development Workflow (The "Grit Way")

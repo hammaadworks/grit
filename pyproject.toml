@@ -1,7 +1,7 @@
 [project]
-name = "grit"
+name = "git2grit"
 version = "0.0.1"
-description = "Grit is a terminal-based CLI wrapper for git commit to intelligently distribute commits."
+description = "Git on TUI steroids with OCD! Transform your Git history with AI-powered commit messages and streak protection."
 readme = "README.md"
 license = "MIT"
 authors = [

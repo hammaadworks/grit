@@ -74,7 +74,7 @@ Ready to take control of your contribution graph?
 
 ### 1. Install
 ```bash
-uv tool install grit
+uv tool install git2grit
 ```
 
 ### 2. Configure
