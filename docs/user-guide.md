@@ -113,6 +113,36 @@ $ grit sync
 
 ---
 
+## 8. Context & Branch Management (`grit branch`)
+
+Switch between projects and branches without the "Stash Nightmares."
+
+```bash
+$ grit branch
+```
+
+- **Unified Interface**: List local branches, remote branches, and active Worktrees in one TUI.
+- **Conflict-Free Switching**: If your tree is dirty, Grit will prompt you to create a **Worktree** (Best Practice) or a **WIP Commit** instead of messy stashing.
+- **Smart Worktrees**: Automatically copies `.env` files when creating new Worktrees to avoid "Duplicate Setup Tax."
+- **Bulk Cleanup**: Select multiple stale branches using **Spacebar** and delete them all at once with **D**.
+
+---
+
+## 9. Remote Management (`grit config`)
+
+Manage your project remotes with professional precision inside the Control Center.
+
+1. Run `grit config`.
+2. Scroll to the bottom and select **Manage Git Remotes**.
+
+- **Safe Sync**: Synchronize forks via clean `rebase` instead of polluting merges.
+- **Stale Pruning**: Clean up "ghost" branches that no longer exist on the remote.
+- **Quick Migration**: Easily rename remotes or update fetch/push URLs.
+
+---
+
+## 10. Support Grit (`grit sponsor`)
+...
 ## Maintenance & Integrity
 
 ### Version Check

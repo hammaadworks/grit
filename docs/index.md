@@ -96,6 +96,21 @@ grit commit -m "Initial commit"
 -   :material-book-open-page-variant: **[Read the User Guide ➔](user-guide.md)**
 -   :material-palette: **[Brand & Design System ➔](brand.md)**
 -   :material-robot: **[AI Skills & Agentic Context ➔](ai-skills.md)**
+-   :material-heart: **[Sponsorship & Monetization ➔](sponsorship.md)**
+-   :material-help-circle: **[FAQ & Troubleshooting ➔](faq.md)**
+    
+    Learn about dashboards, headless CI/CD setups, and uninstallation.
+
+</div>
+
+
+
+
+<div class="grid cards" markdown>
+
+-   :material-book-open-page-variant: **[Read the User Guide ➔](user-guide.md)**
+-   :material-palette: **[Brand & Design System ➔](brand.md)**
+-   :material-robot: **[AI Skills & Agentic Context ➔](ai-skills.md)**
 -   :material-help-circle: **[FAQ & Troubleshooting ➔](faq.md)**
     
     Learn about dashboards, headless CI/CD setups, and uninstallation.
