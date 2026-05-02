@@ -312,3 +312,164 @@ def execute_grit_spread(commit_hashes: list[str], hash_to_date: dict[str, str], 
     finally:
         # Cleanup
         subprocess.run(["git", "branch", "-D", temp_branch], capture_output=True)
+
+# ==========================================
+# Remote, Branch, and Worktree Management
+# ==========================================
+
+def get_remotes() -> list[dict]:
+    try:
+        res = subprocess.run(["git", "remote", "-v"], capture_output=True, text=True)
+        remotes = {}
+        for line in res.stdout.strip().splitlines():
+            parts = line.split()
+            if len(parts) >= 3:
+                name = parts[0]
+                url = parts[1]
+                type_ = parts[2].strip("()")
+                if name not in remotes:
+                    remotes[name] = {"name": name, "fetch": "", "push": ""}
+                if type_ == "fetch":
+                    remotes[name]["fetch"] = url
+                elif type_ == "push":
+                    remotes[name]["push"] = url
+        return list(remotes.values())
+    except Exception:
+        return []
+
+def prune_remote(name: str) -> bool:
+    try:
+        res = subprocess.run(["git", "fetch", "--prune", name], capture_output=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+def set_remote_url(name: str, url: str) -> bool:
+    try:
+        res = subprocess.run(["git", "remote", "set-url", name, url], capture_output=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+def rename_remote(old_name: str, new_name: str) -> bool:
+    try:
+        res = subprocess.run(["git", "remote", "rename", old_name, new_name], capture_output=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+def delete_remote(name: str) -> bool:
+    try:
+        res = subprocess.run(["git", "remote", "remove", name], capture_output=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+def sync_fork(upstream_remote: str = "upstream") -> tuple[bool, str]:
+    try:
+        # Fetch
+        f_res = subprocess.run(["git", "fetch", upstream_remote], capture_output=True, text=True)
+        if f_res.returncode != 0:
+            return False, f"Fetch failed: {f_res.stderr}"
+        # Rebase
+        r_res = subprocess.run(["git", "rebase", f"{upstream_remote}/main"], capture_output=True, text=True)
+        if r_res.returncode != 0:
+            subprocess.run(["git", "rebase", "--abort"], capture_output=True)
+            # Try master if main fails
+            r2_res = subprocess.run(["git", "rebase", f"{upstream_remote}/master"], capture_output=True, text=True)
+            if r2_res.returncode != 0:
+                subprocess.run(["git", "rebase", "--abort"], capture_output=True)
+                return False, "Rebase failed (conflicts or no main/master branch found)."
+        return True, "Successfully synced via rebase."
+    except Exception as e:
+        return False, str(e)
+
+def is_working_tree_dirty() -> bool:
+    try:
+        res = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        return len(res.stdout.strip()) > 0
+    except Exception:
+        return True # Assume dirty on error for safety
+
+def get_branches() -> list[dict]:
+    try:
+        # Format: %(HEAD)|%(refname:short)|%(upstream:short)|%(upstream:trackshort)|%(objectname:short)
+        res = subprocess.run(
+            ["git", "for-each-ref", "--format=%(HEAD)|%(refname:short)|%(upstream:short)|%(upstream:trackshort)", "refs/heads/", "refs/remotes/"],
+            capture_output=True, text=True
+        )
+        branches = []
+        for line in res.stdout.strip().splitlines():
+            if not line: continue
+            parts = line.split('|')
+            is_head = parts[0].strip() == '*'
+            name = parts[1].strip()
+            upstream = parts[2].strip() if len(parts) > 2 else ""
+            track_status = parts[3].strip() if len(parts) > 3 else ""
+            
+            is_remote = name.startswith('origin/') or '/' in name and not upstream # Heuristic
+            
+            branches.append({
+                "name": name,
+                "is_current": is_head,
+                "is_remote": is_remote,
+                "upstream": upstream,
+                "status": track_status, # e.g., '=', '>', '<', '<>'
+            })
+        return branches
+    except Exception:
+        return []
+
+def delete_branch(name: str, force: bool = False) -> tuple[bool, str]:
+    try:
+        flag = "-D" if force else "-d"
+        is_remote = name.startswith('origin/') or '/' in name # Basic check
+        if is_remote:
+            remote, bname = name.split('/', 1)
+            res = subprocess.run(["git", "push", remote, "--delete", bname], capture_output=True, text=True)
+        else:
+            res = subprocess.run(["git", "branch", flag, name], capture_output=True, text=True)
+        return res.returncode == 0, res.stderr or res.stdout
+    except Exception as e:
+        return False, str(e)
+
+def get_worktrees() -> list[dict]:
+    try:
+        res = subprocess.run(["git", "worktree", "list", "--porcelain"], capture_output=True, text=True)
+        worktrees = []
+        current = {}
+        for line in res.stdout.splitlines():
+            if line.startswith("worktree "):
+                if current: worktrees.append(current)
+                current = {"path": line.replace("worktree ", "").strip()}
+            elif line.startswith("branch "):
+                current["branch"] = line.replace("branch ", "").replace("refs/heads/", "").strip()
+            elif line == "detached":
+                current["branch"] = "(detached)"
+        if current: worktrees.append(current)
+        return worktrees
+    except Exception:
+        return []
+
+def create_worktree(path: str, branch: str) -> tuple[bool, str]:
+    try:
+        res = subprocess.run(["git", "worktree", "add", path, branch], capture_output=True, text=True)
+        return res.returncode == 0, res.stderr or res.stdout
+    except Exception as e:
+        return False, str(e)
+
+def delete_worktree(path: str, force: bool = False) -> tuple[bool, str]:
+    try:
+        flag = "--force" if force else ""
+        cmd = ["git", "worktree", "remove", path]
+        if flag: cmd.insert(3, flag)
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        return res.returncode == 0, res.stderr or res.stdout
+    except Exception as e:
+        return False, str(e)
+def add_remote(name: str, url: str) -> bool:
+    try:
+        res = subprocess.run(["git", "remote", "add", name, url], capture_output=True)
+        return res.returncode == 0
+    except Exception:
+        return False

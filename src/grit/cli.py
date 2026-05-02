@@ -10,10 +10,12 @@ from grit.commands.log import run_log
 from grit.commands.move import run_move
 from grit.commands.status import run_status
 from grit.commands.sync import run_sync
+from grit.commands.sponsor import run_sponsor
 from grit.commands.dashboard import run_dashboard
 from grit.commands.spread import run_spread
 from grit.commands.undo import run_undo
 from grit.commands.ungrit import run_ungrit
+from grit.commands.branch import run_branch_manager
 
 from grit.state import StateManager
 from grit.ui import (BRAND_COLOR, console, err_console, ERROR_COLOR,
@@ -191,12 +193,24 @@ def move(push: Annotated[bool, typer.Option("--push", "-p", help="Force push cha
     run_move(state, push=push)
 
 
-@app.command()
+@app.command(rich_help_panel="Maintenance & Support")
+def sponsor():
+    """Support the ongoing development of Grit. 💖"""
+    run_sponsor()
+
+
+@app.command(rich_help_panel="Maintenance & Support")
 def info(ctx: typer.Context):
     """Displays high-level system information and command overview."""
     ctx.parent.info_name = "grit"
     print_banner()
     console.print(ctx.parent.get_help())
+
+
+@app.command()
+def branch():
+    """Unified Context & Worktree Manager."""
+    run_branch_manager(state)
 
 
 @app.command()
@@ -214,7 +228,7 @@ def undo():
     run_undo(state)
 
 
-@app.command()
+@app.command(rich_help_panel="Maintenance & Support")
 def ungrit(force: Annotated[bool, typer.Option("--force", "-f", help="Bypass confirmation")] = False):
     """Decommission Grit and delete all local configuration and state."""
     run_ungrit(state, force)

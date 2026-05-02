@@ -27,7 +27,7 @@ def get_banner_layout() -> Table:
     Used for consistent branding in interactive TUI screens.
     """
     grid = Table.grid(expand=True)
-    grid.add_column(justify="left")
+    grid.add_column(justify="left", no_wrap=True)
 
     # ASCII Art
     grid.add_row("")
@@ -164,11 +164,22 @@ def run_text_input(title: str, initial_text: str = "", help_text: str = "",
             
             def render():
                 grid = Table.grid(expand=True)
-                if show_banner: grid.add_row(get_banner_layout())
+                
+                # Dynamically hide banner if terminal is too short
+                banner_h = 10
+                effective_show_banner = show_banner and console.height > (banner_h + 10)
+                
+                if effective_show_banner: grid.add_row(get_banner_layout())
+                
                 input_grid = Table.grid(expand=True)
                 input_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
                 current_lines = text.count('\n') + 1
-                target_height = max(min_lines, current_lines)
+                
+                # Calculate available height for input
+                reserved_height = (banner_h if effective_show_banner else 0) + 8
+                max_input_height = max(3, console.height - reserved_height)
+                target_height = min(max_input_height, max(min_lines, current_lines))
+                
                 display_text = Text(text); display_text.append("_", style="bold white")
                 input_grid.add_row(Padding(Panel(display_text, border_style=BRAND_COLOR, padding=(1, 2), height=target_height), (1, 0)))
                 if not help_text:
@@ -226,13 +237,41 @@ def run_selection_menu(title: str, options: list[str], selected_idx: int = 0,
             
             def render():
                 grid = Table.grid(expand=True)
-                if show_banner: grid.add_row(get_banner_layout())
+                
+                # Dynamically hide banner if terminal is too short
+                banner_h = 10
+                effective_show_banner = show_banner and console.height > (banner_h + 8)
+                
+                if effective_show_banner: grid.add_row(get_banner_layout())
+                
                 menu_grid = Table.grid(expand=True)
+                menu_grid.add_column(no_wrap=True)
                 menu_grid.add_row(Text(f" {title}", style=f"bold {ACCENT_COLOR}"))
                 menu_grid.add_row("")
-                for i, opt in enumerate(options):
-                    is_cur = i == idx; prefix = "▶ " if is_cur else "  "; style = f"bold {BRAND_COLOR}" if is_cur else "dim"
+
+                # Calculate available height for options
+                reserved_height = (banner_h if effective_show_banner else 0) + 6
+                max_display = max(3, console.height - reserved_height)
+                
+                start_idx = 0
+                if len(options) > max_display:
+                    if idx >= max_display - 1:
+                        start_idx = min(idx - (max_display // 2), len(options) - max_display)
+
+                for i in range(start_idx, min(start_idx + max_display, len(options))):
+                    opt = options[i]
+                    is_cur = i == idx
+                    prefix = "▶ " if is_cur else "  "
+                    style = f"bold {BRAND_COLOR}" if is_cur else "dim"
                     menu_grid.add_row(Text(f"{prefix}{opt}", style=style))
+
+                if len(options) > max_display:
+                    remaining = len(options) - (start_idx + max_display)
+                    if remaining > 0:
+                        menu_grid.add_row(Text(f"   ... and {remaining} more", style="dim italic"))
+                    elif start_idx > 0:
+                        menu_grid.add_row(Text(f"   ... and {start_idx} above", style="dim italic"))
+
                 grid.add_row(Padding(menu_grid, (0, 4)))
                 grid.add_row(Text("\n [↑↓] Navigate  [Enter] Select  [Q] Abort", style="dim"))
                 live.update(grid, refresh=True)

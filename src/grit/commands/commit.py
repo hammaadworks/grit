@@ -72,20 +72,29 @@ def run_commit(state: StateManager, ctx: typer.Context, verbose: bool = False, a
         # 2. Fetch Configs
         commit_types_str = state.get_config("commit_types") or DEFAULT_COMMIT_TYPES_STR
         commit_types = [t.strip() for t in commit_types_str.split(",") if t.strip()]
-        rules_path = state.get_config("commit_rules_file")
+        rules_path = state.db_path.parent / "commit_message_rules.md"
         custom_rules = "None configured"
-        if rules_path and Path(rules_path).expanduser().exists():
+        if rules_path.exists():
             try:
-                custom_rules = Path(rules_path).expanduser().read_text().strip()
+                content = rules_path.read_text().strip()
+                if content and content != "# Custom Commit Rules\n\nAdd your instructions here.":
+                    custom_rules = content
             except Exception as e:
                 custom_rules = f"Error reading rules: {e}"
 
         # 3. System Instructions
         instructions = (
-            "You are a Distinguished System Architect creating high-fidelity Conventional Commit messages.\n"
-            "Analyze the staged files and the diff to create a commit message that reflects technical wisdom.\n"
-            "The message must be structured, professional, and explain the WHY behind the changes.\n"
-            "Respond ONLY with the requested structured output."
+            "You are a Senior Staff Engineer at a world-class technology company, known for impeccable documentation and architectural clarity.\n"
+            "Your task is to transform a raw code diff into a high-fidelity Conventional Commit message that serves as a permanent record of technical intent.\n\n"
+            "GUIDELINES FOR EXCELLENCE:\n"
+            "1. THE HEADER: Must be concise (under 72 chars). Use the imperative mood (e.g., 'Fix memory leak' NOT 'Fixed memory leak').\n"
+            "2. THE WHY: Prioritize explaining the RATIONALE. Why was this change necessary? What problem does it solve?\n"
+            "3. THE HOW: Briefly summarize the technical implementation details. Connect the 'What' in the code to the 'Why' in the intent.\n"
+            "4. SCOPE PRECISION: The scope must be the primary module, component, or sub-system affected.\n"
+            "5. STRUCTURED BODY: Provide a clear, bulleted breakdown explaining the rationale, implementation, and any potential side effects or breaking changes.\n\n"
+            "Respond ONLY with the requested structured output.\n\n"
+            "CRITICAL: If the USER CUSTOM RULES below contradict any of the above instructions, "
+            "the USER CUSTOM RULES MUST take absolute precedence."
         )
         
         # 4. User Prompt
@@ -331,9 +340,9 @@ def _render_stage_picker(visible_items, idx, scroll_offset, visible_count, selec
         )
 
     table = Table(box=None, padding=(0, 1), show_header=False, expand=False)
-    table.add_column("Cursor", width=2, justify="left")
-    table.add_column("Checkbox", width=3, justify="left")
-    table.add_column("Path", justify="left")
+    table.add_column("Cursor", width=2, justify="left", no_wrap=True)
+    table.add_column("Checkbox", width=3, justify="left", no_wrap=True)
+    table.add_column("Path", justify="left", no_wrap=True)
 
     upper = min(scroll_offset + visible_count, len(visible_items))
     for i in range(scroll_offset, upper):
@@ -577,16 +586,17 @@ def _generate_ai_commit_message(ai_url, ai_key, ai_model, state: StateManager, v
     # Custom Configs
     commit_types_str = state.get_config("commit_types") or DEFAULT_COMMIT_TYPES_STR
     commit_types = [t.strip() for t in commit_types_str.split(",") if t.strip()]
-    
-    rules_path = state.get_config("commit_rules_file")
+
+    rules_path = state.db_path.parent / "commit_message_rules.md"
     custom_rules = None
-    if rules_path and Path(rules_path).expanduser().exists():
+    if rules_path.exists():
         try:
-            custom_rules = Path(rules_path).expanduser().read_text()
-            console.print(f"    [{BRAND_COLOR}]✨ Using custom AI rules from: {rules_path}[/{BRAND_COLOR}]")
+            content = rules_path.read_text().strip()
+            if content and content != "# Custom Commit Rules\n\nAdd your instructions here.":
+                custom_rules = content
+                console.print(f"    [{BRAND_COLOR}]✨ Using custom AI rules from: {rules_path}[/{BRAND_COLOR}]")
         except Exception as e:
             if verbose: console.print(f"[red]Failed to read rules file: {e}[/red]")
-
     start_time = time.time()
     
     # Limit diff size for AI if it's massive to save memory/tokens
@@ -966,3 +976,4 @@ def _post_commit_actions(state: StateManager):
         subprocess.run(["git", "push"])
 
     run_status(state=state, yes=True)
+

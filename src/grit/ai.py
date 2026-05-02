@@ -93,10 +93,17 @@ def generate_commit_message(
         files_list = "\n".join(f"- {f}" for f in staged_files)
 
         instructions = (
-            "You are a Distinguished System Architect creating high-fidelity Conventional Commit messages.\n"
-            "Analyze the staged files and the diff to create a commit message that reflects technical wisdom.\n"
-            "The message must be structured, professional, and explain the WHY behind the changes.\n"
-            "Respond ONLY with the requested structured output."
+            "You are a Senior Staff Engineer at a world-class technology company, known for impeccable documentation and architectural clarity.\n"
+            "Your task is to transform a raw code diff into a high-fidelity Conventional Commit message that serves as a permanent record of technical intent.\n\n"
+            "GUIDELINES FOR EXCELLENCE:\n"
+            "1. THE HEADER: Must be concise (under 72 chars). Use the imperative mood (e.g., 'Fix memory leak' NOT 'Fixed memory leak').\n"
+            "2. THE WHY: Prioritize explaining the RATIONALE. Why was this change necessary? What problem does it solve?\n"
+            "3. THE HOW: Briefly summarize the technical implementation details. Connect the 'What' in the code to the 'Why' in the intent.\n"
+            "4. SCOPE PRECISION: The scope must be the primary module, component, or sub-system affected.\n"
+            "5. STRUCTURED BODY: Provide a clear, bulleted breakdown explaining the rationale, implementation, and any potential side effects or breaking changes.\n\n"
+            "Respond ONLY with the requested structured output.\n\n"
+            "CRITICAL: If the USER CUSTOM RULES below contradict any of the above instructions, "
+            "the USER CUSTOM RULES MUST take absolute precedence."
         )
 
         if custom_rules:

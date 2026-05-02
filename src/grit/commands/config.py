@@ -199,19 +199,31 @@ def run_config_interactive(state: StateManager):
         {"id": "ai_model", "title": "AI: Model Name", "category": "AI INTELLIGENCE",
          "desc": "The model to use (e.g. llama3 for Ollama, claude-3-haiku-20240307).",
          "key": "ai_model", "default": "Not configured"},
-        {"id": "ai_rules", "title": "AI: Commit Rules File", "category": "AI INTELLIGENCE",
-         "desc": "Path to a text file containing custom AI rules (markdown supported).",
-         "key": "commit_rules_file", "default": ""},
-        {"id": "editor", "title": "Editor: Command", "category": "ENVIRONMENT",
-         "desc": "Command to open your preferred graphical editor (e.g., 'code --wait', 'subl -w', 'atom -w', 'nano').",
+        {"id": "editor", "title": "Editor: Command", "category": "COMMIT MESSAGES",
+         "desc": "Command to open your preferred graphical editor (e.g., 'code --wait', 'nano').",
          "key": "editor_command", "default": ""},
+        {"id": "ai_rules", "title": "AI: Commit Rules", "category": "COMMIT MESSAGES",
+         "desc": "Edit your custom AI commit rules in the configured editor.",
+         "key": "_ai_rules_pseudo_key", "default": "▶ Enter to edit rules"},
     ]
+
+    import subprocess
+    repo_name_res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if repo_name_res.returncode == 0:
+        repo_name = Path(repo_name_res.stdout.strip()).name
+        options.append({
+            "id": "remotes", "title": "Manage Git Remotes", "category": f"PROJECT SETTINGS ({repo_name})",
+            "desc": "Interactively manage, prune, and sync remote repositories.",
+            "key": "_remotes_pseudo_key", "default": "▶ Enter to open manager"
+        })
 
     # Session State: Load everything into memory first.
     session_config = {
         opt["key"]: state.get_config(opt["key"]) or opt["default"]
-        for opt in options
+        for opt in options if not opt["key"].startswith("_")
     }
+    session_config["_remotes_pseudo_key"] = "▶ Enter to open manager"
+    session_config["_ai_rules_pseudo_key"] = "▶ Enter to edit rules"
 
     selected_idx = 0
     error_msg = ""
@@ -224,6 +236,7 @@ def run_config_interactive(state: StateManager):
 
             # Header / Banner
             grid.add_row(get_banner_layout())
+            grid.add_row(Text(f"    State DB: {state.db_path}\n", style="yellow"))
 
             # Settings Table
             table = Table(box=box.ROUNDED, padding=(0, 1), show_header=False, expand=True, border_style="dim")
@@ -324,6 +337,12 @@ def run_config_interactive(state: StateManager):
                     new_val = "today" if current == "start_date" else "start_date"
                     session_config[opt["key"]] = new_val
                     error_msg = ""
+                elif opt["id"] == "remotes":
+                    live.stop()
+                    from grit.commands.remote import run_remote_manager
+                    run_remote_manager()
+                    set_terminal_title("Grit — Configuration")
+                    live.start()
                 elif opt["id"] == "types":
                     # Multi-select picker for types
                     live.stop()
@@ -331,6 +350,19 @@ def run_config_interactive(state: StateManager):
                     session_config[opt["key"]] = new_val
                     error_msg = ""
                     live.start()
+                elif opt["id"] == "ai_rules":
+                    editor = session_config.get("editor_command") or state.get_config("editor_command")
+                    if not editor:
+                        error_msg = "Editor not configured. Please set Editor Command first."
+                    else:
+                        live.stop()
+                        rules_path = state.db_path.parent / "commit_message_rules.md"
+                        if not rules_path.exists():
+                            rules_path.write_text("# Custom Commit Rules\n\nAdd your instructions here.\n")
+                        import subprocess
+                        subprocess.run(editor.split() + [str(rules_path)])
+                        error_msg = ""
+                        live.start()
                 else:
                     live.stop()
                     current_val = session_config[opt["key"]]
@@ -343,13 +375,6 @@ def run_config_interactive(state: StateManager):
                         error_msg = "Target must be a positive integer."
                     elif opt["id"] == "start" and not validate_date(new_val):
                         error_msg = "Date must be YYYY-MM-DD."
-                    elif opt["id"] == "ai_rules":
-                        is_valid, err = validate_file_path(new_val)
-                        if is_valid:
-                            session_config[opt["key"]] = new_val
-                            error_msg = ""
-                        else:
-                            error_msg = err
                     elif new_val:
                         session_config[opt["key"]] = new_val
                         error_msg = ""
