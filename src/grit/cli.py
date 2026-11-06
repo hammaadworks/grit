@@ -16,6 +16,7 @@ from grit.commands.spread import run_spread
 from grit.commands.undo import run_undo
 from grit.commands.ungrit import run_ungrit
 from grit.commands.branch import run_branch_manager
+from grit.commands.review import run_review
 
 from grit.state import StateManager
 from grit.ui import (BRAND_COLOR, console, err_console, ERROR_COLOR,
@@ -185,6 +186,15 @@ def commit(
 def log(ctx: typer.Context):
     """A human-readable git log on jetpack rollerskates."""
     run_log(ctx)
+
+
+@app.command()
+def review(
+    files: Annotated[Optional[list[str]], typer.Argument(help="Specific files to review. If none, reviews staged changes.")] = None,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show detailed logs")] = False
+):
+    """Ultra-compressed code review comments using AI."""
+    run_review(state, files or [], verbose)
 
 
 @app.command()

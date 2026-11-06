@@ -92,32 +92,42 @@ def generate_commit_message(
         staged_files = get_staged_files()
         files_list = "\n".join(f"- {f}" for f in staged_files)
 
-        instructions = (
-            "You are a Senior Staff Engineer. Your task is to transform a raw code diff into a high-fidelity Conventional Commit message.\n"
-            "Write commit messages terse and exact. No fluff. Why over what.\n\n"
-            "RULES:\n"
-            "1. SUBJECT LINE:\n"
-            "   - <type>(<scope>): <imperative summary>\n"
-            "   - Imperative mood: 'add', 'fix', 'remove' - NOT 'added', 'adds', 'adding'.\n"
-            "   - ≤50 chars when possible, hard cap 72. No trailing period.\n"
-            "   - Match project convention for capitalization after colon.\n"
-            "2. THE BODY (ONLY IF NEEDED):\n"
-            "   - Skip entirely when subject is self-explanatory.\n"
-            "   - Add ONLY for: non-obvious *why*, breaking changes, migration notes, linked issues.\n"
-            "   - Wrap at 72 chars. Bullets '-' not '*'.\n"
-            "   - Reference issues: 'Closes #42', 'Refs #17'.\n"
-            "3. SCOPE PRECISION: Primary module affected. Do not restate file names.\n"
-            "4. PROHIBITED:\n"
-            "   - 'This commit does X', 'I', 'we', 'now', 'currently'.\n"
-            "   - 'As requested by...', AI attributions.\n"
-            "   - Emojis.\n\n"
-            "Respond ONLY with the requested structured output.\n\n"
-            "CRITICAL: If the USER CUSTOM RULES below contradict any of the above instructions, "
-            "the USER CUSTOM RULES MUST take absolute precedence."
-        )
+        try:
+            from pathlib import Path
+            prompt_path = Path(__file__).parent / "prompts" / "commit.md"
+            if prompt_path.exists():
+                instructions = prompt_path.read_text().strip()
+            else:
+                raise FileNotFoundError()
+        except:
+            instructions = (
+                "You are a Senior Staff Engineer. Your task is to transform a raw code diff into a high-fidelity Conventional Commit message.\n"
+                "Write commit messages terse and exact. No fluff. Why over what.\n\n"
+                "RULES:\n"
+                "1. SUBJECT LINE:\n"
+                "   - <type>(<scope>): <imperative summary>\n"
+                "   - Imperative mood: 'add', 'fix', 'remove' - NOT 'added', 'adds', 'adding'.\n"
+                "   - ≤50 chars when possible, hard cap 72. No trailing period.\n"
+                "   - Match project convention for capitalization after colon.\n"
+                "2. THE BODY (ONLY IF NEEDED):\n"
+                "   - Skip entirely when subject is self-explanatory.\n"
+                "   - Add ONLY for: non-obvious *why*, breaking changes, migration notes, linked issues.\n"
+                "   - Wrap at 72 chars. Bullets '-' not '*'.\n"
+                "   - Reference issues: 'Closes #42', 'Refs #17'.\n"
+                "3. SCOPE PRECISION: Primary module affected. Do not restate file names.\n"
+                "4. PROHIBITED:\n"
+                "   - 'This commit does X', 'I', 'we', 'now', 'currently'.\n"
+                "   - 'As requested by...', AI attributions.\n"
+                "   - Emojis.\n\n"
+                "Respond ONLY with the requested structured output.\n\n"
+            )
 
         if custom_rules:
             instructions += f"\n\nUSER CUSTOM RULES:\n{custom_rules}"
+            
+        # Ensure the model follows user custom rules.
+        if custom_rules:
+            instructions += "\nCRITICAL: If the USER CUSTOM RULES above contradict any of the above instructions, the USER CUSTOM RULES MUST take absolute precedence."
 
         agent = Agent(
             full_model_string,
@@ -167,3 +177,105 @@ The 'body' should be a list of strings explaining rationale and impact (ONLY if 
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+
+def generate_review(
+    diff: str,
+    base_url: str,
+    api_key: str,
+    model_name: str,
+    verbose: bool = False,
+) -> Optional[str]:
+    if not diff.strip():
+        logger.error("Empty diff.")
+        return None
+
+    clean_url = None if base_url in ["Not configured", ""] else base_url
+    clean_key = None if api_key in ["Not configured", ""] else api_key
+
+    # Detect provider based on URL or model name
+    if clean_url and "11434" in clean_url:
+        provider_prefix = "ollama"
+    elif "gemini" in model_name.lower():
+        provider_prefix = "google-gla"
+    else:
+        provider_prefix = "openai"
+
+    full_model_string = f"{provider_prefix}:{model_name}"
+
+    env_vars = {}
+    if provider_prefix == "ollama":
+        env_vars.update({
+            "OLLAMA_API_KEY": clean_key or "ollama",
+            "OLLAMA_NUM_CTX": OLLAMA_NUM_CTX,
+            "OLLAMA_NUM_PREDICT": OLLAMA_NUM_PREDICT,
+            "OLLAMA_NUM_GPU": OLLAMA_NUM_GPU,
+            "OLLAMA_KEEP_ALIVE": OLLAMA_KEEP_ALIVE,
+            "OLLAMA_MAX_LOADED_MODELS": OLLAMA_MAX_LOADED_MODELS,
+        })
+        if clean_url:
+            env_vars["OLLAMA_BASE_URL"] = clean_url
+    elif provider_prefix == "google-gla":
+        if clean_key:
+            env_vars["GEMINI_API_KEY"] = clean_key
+            env_vars["GOOGLE_API_KEY"] = clean_key
+    elif provider_prefix == "openai":
+        if clean_key:
+            env_vars["OPENAI_API_KEY"] = clean_key
+        if clean_url:
+            env_vars["OPENAI_BASE_URL"] = clean_url
+
+    original_env = {k: os.environ.get(k) for k in env_vars}
+    os.environ.update(env_vars)
+
+    try:
+        from pathlib import Path
+        
+        # Load the caveman-review prompt
+        prompt_path = Path(__file__).parent / "prompts" / "review.md"
+        if prompt_path.exists():
+            instructions = prompt_path.read_text().strip()
+        else:
+            instructions = (
+                "Write code review comments terse and actionable. One line per finding. Location, problem, fix. No throat-clearing.\n"
+                "Format: `L<line>: <problem>. <fix>.` — or `<file>:L<line>: ...` when reviewing multi-file diffs.\n"
+                "Severity prefix: `🔴 bug:`, `🟡 risk:`, `🔵 nit:`, `❓ q:`.\n"
+                "Drop all conversational filler."
+            )
+
+        agent = Agent(
+            full_model_string,
+            instructions=instructions,
+            retries=AI_RETRIES,
+        )
+
+        @agent.tool_plain
+        def read_workspace_file(file_path: str) -> str:
+            """Read the contents of a file in the project workspace to get more context for the review."""
+            try:
+                return Path(file_path).read_text(encoding='utf-8')
+            except Exception as e:
+                return f"Error reading file: {e}"
+
+        prompt = f"RAW DIFF:\n{diff[:RAW_DIFF_PROMPT_LIMIT]}\n\nReview this diff."
+
+        try:
+            result = agent.run_sync(prompt)
+            if verbose:
+                logger.debug(f"AI REVIEW RESULT: {result.output}")
+            return result.output
+        except Exception as e:
+            err_msg = str(e)
+            if "nodename nor servname provided" in err_msg or "connection" in err_msg.lower():
+                logger.warning(f"Connection failed: Internet is not available or connection not established. ({err_msg})")
+            else:
+                logger.warning(f"Generation failed: {err_msg}")
+            return None
+
+    finally:
+        for k, v in original_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+

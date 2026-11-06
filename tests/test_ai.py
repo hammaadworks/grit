@@ -103,23 +103,70 @@ def test_generate_commit_message_no_body():
             assert res == "feat(core): add new feature"
 
 def test_generate_commit_message_instructions():
-    """Verify that the instructions passed to the Agent contain the caveman-commit rules."""
+    """Verify that the instructions passed to the Agent contain the new commit rules."""
     diff = "test diff"
     from grit.constants import COMMIT_TYPES
-    
+
     with patch("grit.executor.get_staged_files", return_value=["test.py"]):
         with patch("grit.ai.Agent") as MockAgent:
             mock_agent_instance = MockAgent.return_value
             mock_agent_instance.run_sync.return_value = MagicMock()
-            
+
             generate_commit_message(diff, "url", "key", "model", COMMIT_TYPES)
-            
+
             MockAgent.assert_called()
             args, kwargs = MockAgent.call_args
             instructions = kwargs.get("instructions", "")
-            
-            assert "terse and exact" in instructions
-            assert "No fluff" in instructions
-            assert "Why over what" in instructions
-            assert "PROHIBITED" in instructions
-            assert "≤50 chars" in instructions
+
+            # Check for strings present in the commit.md prompt
+            assert "commit-message-storyteller" in instructions or "Conventional Commits" in instructions
+
+
+def test_generate_review_success():
+    from grit.ai import generate_review
+
+    diff = "test diff"
+
+    class DummyData:
+        output = "L10: 🔴 bug: test error. fix it."
+
+    class DummyResult:
+        data = DummyData()
+
+    with patch("grit.ai.Agent") as MockAgent:
+        mock_agent_instance = MockAgent.return_value
+        # Using output property to match pydantic-ai basic Agent response
+        dummy_result = MagicMock()
+        dummy_result.output = "L10: 🔴 bug: test error. fix it."
+        mock_agent_instance.run_sync.return_value = dummy_result
+
+        result = generate_review(diff, "url", "key", "model")
+
+        assert result == "L10: 🔴 bug: test error. fix it."
+        MockAgent.assert_called()
+
+
+def test_generate_review_empty_diff():
+    from grit.ai import generate_review
+    result = generate_review("   ", "url", "key", "model")
+    assert result is None
+
+
+def test_generate_review_instructions():
+    """Verify that the instructions passed to the Agent contain the caveman-review rules."""
+    diff = "test diff"
+    from grit.ai import generate_review
+
+    with patch("grit.ai.Agent") as MockAgent:
+        mock_agent_instance = MockAgent.return_value
+        dummy_result = MagicMock()
+        dummy_result.output = "review"
+        mock_agent_instance.run_sync.return_value = dummy_result
+
+        generate_review(diff, "url", "key", "model")
+
+        MockAgent.assert_called()
+        args, kwargs = MockAgent.call_args
+        instructions = kwargs.get("instructions", "")
+
+        assert "caveman-review" in instructions or "terse and actionable" in instructions

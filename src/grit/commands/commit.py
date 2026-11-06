@@ -530,6 +530,13 @@ def _interactive_commit_message_flow(state: StateManager, ctx: typer.Context, ve
             subprocess.run(["git", "reset"])
             return run_commit(state, ctx, verbose=verbose)
 
+        if choice == "🧐 Code Review (AI)":
+            _generate_and_display_review(ai_url, ai_key, ai_model, verbose=verbose)
+            # Re-fetch options in case anything changed
+            options = _build_commit_options(ai_key, commit_types, has_draft=has_draft)
+            idx = options.index("🧐 Code Review (AI)")
+            continue
+
         if choice in ["✨ Auto-generate (AI)", "✨ Use AI Draft (Ready)"]:
             force = (choice == "✨ Auto-generate (AI)" and has_draft)
             msg = _generate_ai_commit_message(ai_url, ai_key, ai_model, state=state, verbose=verbose, force=force)
@@ -571,6 +578,8 @@ def _build_commit_options(ai_key, commit_types, has_draft: bool = False):
         if has_draft:
             options.append("✨ Use AI Draft (Ready)")
     options.extend(commit_types)
+    if ai_key and ai_key != "Not configured" and ai_key != "":
+        options.append("🧐 Code Review (AI)")
     options.append("↩ Go Back")
     return options
 
@@ -673,6 +682,75 @@ def _generate_ai_commit_message(ai_url, ai_key, ai_model, state: StateManager, v
             f"[{ERROR_COLOR}]✗ AI generation failed. Falling back to manual.[/{ERROR_COLOR}]"
         )
     return None
+
+def _generate_and_display_review(ai_url, ai_key, ai_model, verbose: bool = False):
+    import time
+    from rich.spinner import Spinner
+    from rich.columns import Columns
+    from rich.panel import Panel
+    from grit.ai import generate_review
+    from grit.constants import AI_ANALYSIS_QUOTES, QUOTE_CHANGE_INTERVAL_SECONDS
+    from concurrent.futures import ThreadPoolExecutor
+
+    diff = get_staged_diff()
+    if not diff:
+        err_console.print(f"[{WARN_COLOR}]⚠ No staged diff to review.[/{WARN_COLOR}]")
+        time.sleep(2)
+        return
+
+    # Limit diff size for AI if it's massive to save memory/tokens
+    if len(diff) > DIFF_TRUNCATION_LIMIT:
+        if verbose: console.print(f"[{WARN_COLOR}]⚠ Diff too large ({len(diff)} chars), trimming context.[/{WARN_COLOR}]")
+        diff = diff[:DIFF_TRUNCATION_LIMIT] + "\n... (Diff truncated for memory optimization)"
+
+    start_time = time.time()
+    last_error = None
+    review_text = None
+
+    with Live(console=console, refresh_per_second=UI_REFRESH_RATE) as live:
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(
+            generate_review, diff, ai_url, ai_key, ai_model, verbose
+        )
+        
+        while not future.done():
+            elapsed_total = time.time() - start_time
+            quote_index = int(elapsed_total // QUOTE_CHANGE_INTERVAL_SECONDS) % len(AI_ANALYSIS_QUOTES)
+            current_quote = AI_ANALYSIS_QUOTES[quote_index]
+            
+            ui = Columns([
+                Spinner("dots12", style=BRAND_COLOR),
+                Text.from_markup(
+                    f" [bold {BRAND_COLOR}]{current_quote}[/bold {BRAND_COLOR}] "
+                    f"[dim]({elapsed_total:.1f}s)[/dim]"
+                )
+            ])
+            live.update(ui)
+            time.sleep(KEY_READ_TIMEOUT)
+        
+        try:
+            review_text = future.result()
+        except Exception as e:
+            last_error = e
+            if verbose: console.print(f"[red]Error: {e}[/red]")
+            
+        total_elapsed = time.time() - start_time
+        live.update(
+            Text.from_markup(f"    [{SUCCESS_COLOR}]✓ Code review complete ({total_elapsed:.1f}s)[/{SUCCESS_COLOR}]")
+        )
+
+    if review_text:
+        console.print("\n")
+        console.print(Panel(review_text, border_style=BRAND_COLOR, padding=(1, 2), title="Code Review (Caveman Mode)", title_align="left"))
+        console.print("\n[dim]Press Enter to continue...[/dim]")
+        input()
+    else:
+        if last_error:
+            err_msg = str(last_error)
+            err_console.print(f"[{ERROR_COLOR}]✗ AI review failed: {err_msg}[/{ERROR_COLOR}]")
+        else:
+            err_console.print(f"[{ERROR_COLOR}]✗ AI review failed to generate output.[/{ERROR_COLOR}]")
+        time.sleep(2)
 
 def _manual_commit_message(type_prefix):
     scope_value = _prompt_commit_scope()
